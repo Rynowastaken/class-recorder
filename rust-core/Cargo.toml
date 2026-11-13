@@ -1,0 +1,27 @@
+[package]
+name = "class_recorder_core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "class_recorder_core"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+axum = { version = "0.7", features = ["json"] }
+chrono = { version = "0.4", features = ["serde"] }
+jni = "0.21"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.40", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+tower-http = { version = "0.5", features = ["cors"] }
+tracing = "0.1"
+uuid = { version = "1.10", features = ["v4"] }
+
+[dev-dependencies]
+tower = { version = "0.4", features = ["util"] }
+http-body-util = "0.1"
