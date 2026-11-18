@@ -16,7 +16,7 @@ Records your lectures and files them by course — automatically. It reads your 
 
 ## 🚀 Get started
 
-**1. Install** — grab the APK from [**Releases**](https://github.com/Rynowastaken/class-recorder/releases). Android 10+, 64-bit ARM. Allow Microphone + Notifications.
+**1. Install** — grab the APK from [**Releases**](https://github.com/Rynowastaken/lectureshelf/releases). Android 10+, 64-bit ARM. Allow Microphone + Notifications.
 
 **2. Sync timetable** — Schedule tab → **Sync** → paste your `uni-campus` share link.
 
