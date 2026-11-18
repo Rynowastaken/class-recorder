@@ -44,7 +44,7 @@ android {
             dimension = "channel"
             applicationIdSuffix = ".uitest"
             versionNameSuffix = "-uitest"
-            resValue("string", "app_name", "ClassRecorder UI Test")
+            resValue("string", "app_name", "LectureShelf UI Test")
         }
     }
 

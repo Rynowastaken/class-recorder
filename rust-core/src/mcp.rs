@@ -141,7 +141,7 @@ async fn health_handler(State(state): State<Arc<McpState>>) -> Json<Value> {
         .unwrap_or(0);
     Json(json!({
         "status": "ok",
-        "server": "class-recorder-mcp",
+        "server": "lecture-shelf-mcp",
         "version": env!("CARGO_PKG_VERSION"),
         "hasSchedule": has_schedule,
         "recordingCount": count
@@ -271,7 +271,7 @@ async fn mcp_post_handler(
                     "resources": { "subscribe": false, "listChanged": false }
                 },
                 "serverInfo": {
-                    "name": "class-recorder-mcp",
+                    "name": "lecture-shelf-mcp",
                     "version": env!("CARGO_PKG_VERSION")
                 }
             }),
@@ -621,7 +621,7 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(resp["result"]["serverInfo"]["name"], "class-recorder-mcp");
+        assert_eq!(resp["result"]["serverInfo"]["name"], "lecture-shelf-mcp");
 
         let (status, tools) = post_mcp(
             &app,
