@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +64,33 @@ val LocalBackdropLayer = compositionLocalOf<GraphicsLayer?> { null }
 val LocalWindowBlurActive = compositionLocalOf { false }
 
 /**
+ * Maximum number of glass surfaces allowed to run their own offscreen blur.
+ *
+ * Every blurred card creates a graphicsLayer with a RenderEffect and draws the
+ * whole backdrop into it. That is fine for a handful of static cards, but a
+ * dismissal (confirm sheet out, recorder subtree gone) can animate dozens at
+ * once in a single frame - each re-recording a full-screen layer. libhwui then
+ * overflows the render thread's stack: SIGSEGV with ~150 nested
+ * RenderNode::prepareTreeImpl frames and "stack pointer is close to top of stack".
+ *
+ * Cards past the budget fall back to the tier's opaque fill, which looks
+ * identical at rest and costs nothing.
+ */
+private val LocalGlassBlurBudget = compositionLocalOf { 6 }
+
+/**
+ * How many glass surfaces currently hold a blur slot. A plain Compose state so
+ * claiming one triggers the recomposition that actually enables the effect.
+ */
+private val mutableBlurCount = androidx.compose.runtime.mutableIntStateOf(0)
+
+/** Wraps a subtree so its glass surfaces share a blur budget. */
+@Composable
+fun ProvideGlassBlurBudget(budget: Int = 6, content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalGlassBlurBudget provides budget, content = content)
+}
+
+/**
  * Four-tier DSH Go glass surface with cached outer shadows, cached edge hairlines/rims,
  * and Android 12+ GraphicsLayer / Window backdrop blur for Chrome & Sheet tiers.
  */
@@ -97,9 +125,22 @@ fun GlassSurface(
         }
     }
 
+    // Claim a slot in the shared blur budget. Only the first N surfaces in a
+    // given frame get their own offscreen layer; the rest use the opaque fill.
+    val budget = LocalGlassBlurBudget.current
+    var claimed by remember { mutableStateOf(false) }
+    DisposableEffect(Unit) {
+        if (mutableBlurCount.value < budget) {
+            mutableBlurCount.value++
+            claimed = true
+        }
+        onDispose { if (claimed) mutableBlurCount.value-- }
+    }
+
     val canSampleLayerBlur = s.blurs &&
         surfaces.blurEnabled &&
         !reducedMotion &&
+        claimed &&
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
         backdropLayer != null &&
         tier != GlassTier.Sheet
@@ -183,13 +224,12 @@ fun GlassSurface(
                         renderEffect = cachedBlurEffect
                     }
                     .drawBehind {
-                        val rootW = max(size.width, backdropLayer.size.width.toFloat())
-                        val rootH = max(size.height, backdropLayer.size.height.toFloat())
+                        // Blit the backdrop layer at the card's offset. The layer
+                        // ALREADY holds the gradient and both glows, so redrawing
+                        // them here (as this used to) duplicated full-screen work
+                        // once per blurred card, every frame - that is what made
+                        // animations render at 150ms/frame.
                         translate(left = -rootOffset.x, top = -rootOffset.y) {
-                            drawBackdropLayer(
-                                canvasSize = Size(rootW, rootH),
-                                surfaces = surfaces
-                            )
                             drawLayer(backdropLayer)
                         }
                     }

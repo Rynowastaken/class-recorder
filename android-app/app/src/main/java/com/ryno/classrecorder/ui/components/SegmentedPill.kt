@@ -1,10 +1,15 @@
 package com.ryno.classrecorder.ui.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.DragScope
+import androidx.compose.foundation.gestures.DraggableState
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -20,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -30,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,16 +48,17 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ryno.classrecorder.ui.theme.ClassRecorderTheme
@@ -73,7 +81,7 @@ fun <T> SegmentedPill(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
     chromeGlass: Boolean = false,
-    fractionalIndex: Float? = null
+    pagerState: PagerState? = null
 ) {
     if (segments.isEmpty()) return
     val surfaces = ClassRecorderTheme.surfaces
@@ -83,16 +91,25 @@ fun <T> SegmentedPill(
     val density = LocalDensity.current
 
     val selectedIndex = segments.indexOfFirst { it.value == selected }.coerceAtLeast(0)
-    var dragFraction by remember { mutableStateOf<Float?>(null) }
+    val lastIndex = segments.lastIndex.toFloat()
+    var dragIndex by remember { mutableStateOf<Float?>(null) }
+    val animatedIndex = if (pagerState == null) {
+        val animation = remember { Animatable(selectedIndex.toFloat()) }
+        val dragging = dragIndex != null
+        LaunchedEffect(selectedIndex, dragging, reduced) {
+            if (!dragging) animation.animateTo(selectedIndex.toFloat(), DshMotion.thumbSpring(reduced))
+        }
+        animation
+    } else null
+    val activeSlot = dragIndex?.roundToInt() ?: selectedIndex
+    val reverseDrag = LocalLayoutDirection.current == LayoutDirection.Rtl
 
-    val animatedIndex by animateFloatAsState(
-        targetValue = fractionalIndex?.coerceIn(0f, (segments.size - 1).toFloat())
-            ?: selectedIndex.toFloat(),
-        animationSpec = DshMotion.thumbSpring(reduced),
-        label = "segmentedPillThumb"
-    )
-    val effectiveIndex = (dragFraction ?: animatedIndex).coerceIn(0f, (segments.size - 1).toFloat())
-    val activeSlot = effectiveIndex.roundToInt().coerceIn(0, segments.lastIndex)
+    fun select(value: T) {
+        if (value != selected || pagerState?.isScrollInProgress == true) {
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onSelect(value)
+        }
+    }
 
     val scaledMinHeight = with(density) {
         val textPx = 13.5.sp.toPx() * 1.35f
@@ -120,48 +137,53 @@ fun <T> SegmentedPill(
                             .background(trackFill)
                     } else Modifier
                 )
-                .pointerInput(segments) {
-                    val count = segments.size
-                    if (count < 2) return@pointerInput
-                    var lastSlot = selectedIndex
-                    detectHorizontalDragGestures(
-                        onDragStart = { startOffset ->
-                            val segW = size.width.toFloat() / count
-                            val slot = (startOffset.x / segW).coerceIn(0f, (count - 1).toFloat())
-                            dragFraction = slot
-                            lastSlot = slot.roundToInt()
-                        },
-                        onHorizontalDrag = { change, dragAmount ->
-                            change.consume()
-                            val segW = (size.width.toFloat() / count).coerceAtLeast(1f)
-                            val next = ((dragFraction ?: selectedIndex.toFloat()) + dragAmount / segW)
-                                .coerceIn(0f, (count - 1).toFloat())
-                            val slot = next.roundToInt()
-                            if (slot != lastSlot) {
-                                lastSlot = slot
-                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            }
-                            dragFraction = next
-                        },
-                        onDragEnd = {
-                            val target = (dragFraction ?: selectedIndex.toFloat())
-                                .roundToInt()
-                                .coerceIn(0, count - 1)
-                            dragFraction = null
-                            val picked = segments[target].value
-                            if (picked != selected) {
-                                onSelect(picked)
-                            }
-                        },
-                        onDragCancel = { dragFraction = null }
-                    )
-                }
         ) {
             val count = segments.size
             val innerWidth = (maxWidth - inset * 2).coerceAtLeast(0.dp)
             val segmentWidth = innerWidth / count
-            val stepPx = with(density) { segmentWidth.toPx() }
+            val stepPx = with(density) { segmentWidth.toPx() }.coerceAtLeast(1f)
             val insetPx = with(density) { inset.toPx().roundToInt() }
+            val dragState = if (pagerState != null) {
+                remember(pagerState, stepPx, haptics) {
+                    object : DraggableState {
+                        // A segment's travel on the bar maps to one full pager page.
+                        private fun scrollDelta(delta: Float): Float = with(pagerState.layoutInfo) {
+                            delta * (pageSize + pageSpacing) / stepPx
+                        }
+
+                        override suspend fun drag(
+                            dragPriority: MutatePriority,
+                            block: suspend DragScope.() -> Unit
+                        ) {
+                            pagerState.scroll(dragPriority) {
+                                val dragScope = object : DragScope {
+                                    override fun dragBy(pixels: Float) {
+                                        val previousPage = pagerState.currentPage
+                                        scrollBy(scrollDelta(pixels))
+                                        if (pagerState.currentPage != previousPage) {
+                                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        }
+                                    }
+                                }
+                                dragScope.block()
+                            }
+                        }
+
+                        override fun dispatchRawDelta(delta: Float) {
+                            pagerState.dispatchRawDelta(scrollDelta(delta))
+                        }
+                    }
+                }
+            } else {
+                rememberDraggableState { delta ->
+                    val previousIndex = dragIndex ?: selectedIndex.toFloat()
+                    val nextIndex = (previousIndex + delta / stepPx).coerceIn(0f, lastIndex)
+                    if (previousIndex.roundToInt() != nextIndex.roundToInt()) {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                    dragIndex = nextIndex
+                }
+            }
             val textMeasurer = rememberTextMeasurer()
             val baseLabelStyle = MaterialTheme.typography.labelLarge
             val maxLabelPx = with(density) { (segmentWidth - 10.dp).toPx().coerceAtLeast(16f) }
@@ -190,8 +212,13 @@ fun <T> SegmentedPill(
             Box(
                 modifier = Modifier
                     .offset {
+                        val index = if (pagerState != null) {
+                            pagerState.currentPage + pagerState.currentPageOffsetFraction
+                        } else {
+                            dragIndex ?: animatedIndex?.value ?: selectedIndex.toFloat()
+                        }
                         IntOffset(
-                            x = insetPx + (effectiveIndex * stepPx).roundToInt(),
+                            x = insetPx + (index.coerceIn(0f, lastIndex) * stepPx).roundToInt(),
                             y = insetPx
                         )
                     }
@@ -208,6 +235,31 @@ fun <T> SegmentedPill(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
+                    .draggable(
+                        state = dragState,
+                        orientation = Orientation.Horizontal,
+                        enabled = count > 1,
+                        reverseDirection = reverseDrag,
+                        onDragStarted = {
+                            if (animatedIndex != null) {
+                                dragIndex = animatedIndex.value.coerceIn(0f, lastIndex)
+                            }
+                        },
+                        onDragStopped = {
+                            if (pagerState != null) {
+                                pagerState.animateScrollToPage(
+                                    page = pagerState.currentPage,
+                                    animationSpec = DshMotion.quickTween(reduced)
+                                )
+                            } else if (animatedIndex != null) {
+                                dragIndex?.let { index ->
+                                    animatedIndex.snapTo(index)
+                                    select(segments[index.roundToInt()].value)
+                                    dragIndex = null
+                                }
+                            }
+                        }
+                    )
                     .padding(inset)
                     .selectableGroup(),
                 verticalAlignment = Alignment.CenterVertically
@@ -227,12 +279,7 @@ fun <T> SegmentedPill(
                             .selectable(
                                 selected = index == selectedIndex,
                                 role = Role.Tab,
-                                onClick = {
-                                    if (seg.value != selected) {
-                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        onSelect(seg.value)
-                                    }
-                                }
+                                onClick = { select(seg.value) }
                             )
                             .padding(horizontal = 4.dp),
                         contentAlignment = Alignment.Center

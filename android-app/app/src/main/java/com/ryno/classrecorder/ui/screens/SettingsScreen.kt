@@ -224,10 +224,14 @@ fun SettingsScreen(
                         footer = {
                             OverviewFooterRow(
                                 tone = if (ui.mcpStatus.running) StatusTone.Ok else StatusTone.Idle,
+                                // The URL is the useful part and must survive
+                                // truncation, so it goes first and the hint
+                                // that used to follow it is gone - the trailing
+                                // chevron already signals "tap for more".
                                 text = if (ui.mcpStatus.running) {
-                                    "$lanUrl · Tap for endpoints"
+                                    lanUrl
                                 } else {
-                                    "Tap to view LAN & ADB connection commands"
+                                    "Stopped · tap to see connection commands"
                                 }
                             )
                         },

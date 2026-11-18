@@ -189,8 +189,6 @@ fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
     val topReserved = statusTop + chromeBarHeight
 
     val currentVeilAlpha = pageScrollVeils[pagerState.currentPage] ?: 0f
-    val fractionalPage = (pagerState.currentPage + pagerState.currentPageOffsetFraction)
-        .coerceIn(0f, (ROOT_TABS.size - 1).toFloat())
 
     DshBackdrop(modifier = Modifier.fillMaxSize()) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -298,12 +296,12 @@ fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
                                 scope.launch {
                                     pagerState.animateScrollToPage(
                                         page = targetPage,
-                                        animationSpec = DshMotion.standardTween(reduced)
+                                        animationSpec = DshMotion.quickTween(reduced)
                                     )
                                 }
                             },
                             chromeGlass = true,
-                            fractionalIndex = fractionalPage,
+                            pagerState = pagerState,
                             modifier = Modifier.weight(1f)
                         )
 
