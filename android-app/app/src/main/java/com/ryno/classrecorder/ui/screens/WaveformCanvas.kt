@@ -1,0 +1,231 @@
+package com.ryno.classrecorder.ui.screens
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.unit.dp
+import com.ryno.classrecorder.ui.theme.ClassRecorderTheme
+import kotlin.math.max
+import kotlin.math.roundToInt
+
+/**
+ * Real-time microphone level waveform rendered inside the Mist Glass Record stage.
+ *
+ * Parameterized strictly by theme colors so light/dark and every AppAccent preset
+ * render crisp bars without hard-coded palette hexes.
+ */
+@Composable
+fun LiveWaveformCanvas(
+    amplitudes: List<Float>,
+    active: Boolean,
+    paused: Boolean,
+    modifier: Modifier = Modifier,
+    activeColor: Color = MaterialTheme.colorScheme.primary,
+    idleColor: Color = MaterialTheme.colorScheme.outlineVariant,
+    playheadColor: Color = ClassRecorderTheme.dshColors.danger
+) {
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 96.dp)
+            .semantics {
+                contentDescription = when {
+                    !active -> "Audio waveform idle"
+                    paused -> "Audio waveform paused"
+                    else -> "Live audio waveform"
+                }
+            }
+    ) {
+        if (size.width <= 0f || size.height <= 0f) return@Canvas
+        val barWidth = 3.dp.toPx()
+        val gap = 3.dp.toPx()
+        val stride = barWidth + gap
+        val slotCount = max(12, (size.width / stride).toInt())
+        val centerY = size.height * 0.5f
+        val minBarH = 3.dp.toPx()
+        val maxBarH = (size.height * 0.86f).coerceAtLeast(minBarH)
+        val corner = CornerRadius(barWidth * 0.5f, barWidth * 0.5f)
+
+        val totalWidth = slotCount * stride - gap
+        val startX = ((size.width - totalWidth) * 0.5f).coerceAtLeast(0f)
+
+        for (i in 0 until slotCount) {
+            val sampleIdx = amplitudes.size - slotCount + i
+            val sample = if (sampleIdx in amplitudes.indices) {
+                amplitudes[sampleIdx].coerceIn(0f, 1f)
+            } else {
+                0f
+            }
+            val height = if (!active) {
+                minBarH
+            } else {
+                max(minBarH, sample * maxBarH)
+            }
+            val recency = (i + 1).toFloat() / slotCount.toFloat()
+            val barColor = when {
+                !active -> idleColor.copy(alpha = 0.55f)
+                paused -> activeColor.copy(alpha = 0.35f + 0.25f * recency)
+                sampleIdx < 0 -> idleColor.copy(alpha = 0.45f)
+                else -> activeColor.copy(alpha = 0.45f + 0.55f * recency)
+            }
+            val x = startX + i * stride
+            drawRoundRect(
+                color = barColor,
+                topLeft = Offset(x, centerY - height * 0.5f),
+                size = Size(barWidth, height),
+                cornerRadius = corner
+            )
+        }
+
+        if (active) {
+            val headX = (startX + totalWidth).coerceAtMost(size.width - 1.dp.toPx())
+            drawLine(
+                color = if (paused) idleColor else playheadColor.copy(alpha = 0.85f),
+                start = Offset(headX, size.height * 0.14f),
+                end = Offset(headX, size.height * 0.86f),
+                strokeWidth = 1.5.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+        }
+    }
+}
+
+/**
+ * Interactive scrubbable playback waveform canvas parameterized by [playedColor],
+ * [unplayedColor], and [playheadColor].
+ */
+@Composable
+fun ScrubWaveformCanvas(
+    peaks: List<Float>,
+    progress: Float,
+    onScrub: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    onScrubFinished: (() -> Unit)? = null,
+    playedColor: Color = MaterialTheme.colorScheme.primary,
+    unplayedColor: Color = MaterialTheme.colorScheme.outlineVariant,
+    playheadColor: Color = MaterialTheme.colorScheme.onSurface
+) {
+    var dragging by remember { mutableStateOf(false) }
+    var dragFraction by remember { mutableFloatStateOf(progress) }
+    val displayProgress = (if (dragging) dragFraction else progress).coerceIn(0f, 1f)
+
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 64.dp)
+            .semantics {
+                contentDescription = "Playback position ${(displayProgress * 100).roundToInt()} percent"
+                setProgress { target ->
+                    val clamped = target.coerceIn(0f, 1f)
+                    onScrub(clamped)
+                    onScrubFinished?.invoke()
+                    true
+                }
+            }
+            .pointerInput(Unit) {
+                detectTapGestures { offset ->
+                    if (size.width > 0) {
+                        val frac = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                        onScrub(frac)
+                        onScrubFinished?.invoke()
+                    }
+                }
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { start ->
+                        if (size.width > 0) {
+                            dragging = true
+                            val frac = (start.x / size.width.toFloat()).coerceIn(0f, 1f)
+                            dragFraction = frac
+                            onScrub(frac)
+                        }
+                    },
+                    onHorizontalDrag = { change, _ ->
+                        change.consume()
+                        if (size.width > 0) {
+                            val frac = (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
+                            dragFraction = frac
+                            onScrub(frac)
+                        }
+                    },
+                    onDragEnd = {
+                        dragging = false
+                        onScrubFinished?.invoke()
+                    },
+                    onDragCancel = {
+                        dragging = false
+                    }
+                )
+            }
+    ) {
+        if (size.width <= 0f || size.height <= 0f) return@Canvas
+        val barWidth = 3.dp.toPx()
+        val gap = 2.5.dp.toPx()
+        val stride = barWidth + gap
+        val slotCount = max(16, (size.width / stride).toInt())
+        val centerY = size.height * 0.5f
+        val minBarH = 4.dp.toPx()
+        val maxBarH = (size.height * 0.84f).coerceAtLeast(minBarH)
+        val corner = CornerRadius(barWidth * 0.5f, barWidth * 0.5f)
+
+        val totalWidth = slotCount * stride - gap
+        val startX = ((size.width - totalWidth) * 0.5f).coerceAtLeast(0f)
+        val playheadX = startX + displayProgress * totalWidth
+
+        for (i in 0 until slotCount) {
+            val amp = if (peaks.isEmpty()) {
+                // Gentle deterministic placeholder profile while peaks decode
+                0.18f + 0.12f * ((i * 7 + 3) % 5) / 4f
+            } else {
+                val srcIdx = ((i.toFloat() / slotCount.toFloat()) * peaks.size)
+                    .toInt()
+                    .coerceIn(0, peaks.lastIndex)
+                peaks[srcIdx].coerceIn(0.05f, 1f)
+            }
+            val h = max(minBarH, amp * maxBarH)
+            val x = startX + i * stride
+            val isPlayed = x + barWidth * 0.5f <= playheadX
+            drawRoundRect(
+                color = if (isPlayed) playedColor else unplayedColor.copy(alpha = 0.72f),
+                topLeft = Offset(x, centerY - h * 0.5f),
+                size = Size(barWidth, h),
+                cornerRadius = corner
+            )
+        }
+
+        // Crisp vertical playhead needle + subtle end caps
+        val clampedHeadX = playheadX.coerceIn(1.dp.toPx(), size.width - 1.dp.toPx())
+        drawLine(
+            color = playheadColor,
+            start = Offset(clampedHeadX, size.height * 0.08f),
+            end = Offset(clampedHeadX, size.height * 0.92f),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        drawCircle(
+            color = playheadColor,
+            radius = 3.5.dp.toPx(),
+            center = Offset(clampedHeadX, size.height * 0.08f)
+        )
+    }
+}
