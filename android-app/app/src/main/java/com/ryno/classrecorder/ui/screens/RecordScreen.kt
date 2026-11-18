@@ -1,27 +1,95 @@
 package com.ryno.classrecorder.ui.screens
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ryno.classrecorder.core.CourseSlot
 import com.ryno.classrecorder.service.RecorderState
 import com.ryno.classrecorder.ui.MainUiState
+import com.ryno.classrecorder.ui.components.AppSheet
+import com.ryno.classrecorder.ui.components.BackdropVeil
+import com.ryno.classrecorder.ui.components.CapsuleChoiceChip
+import com.ryno.classrecorder.ui.components.DshPrimaryButton
+import com.ryno.classrecorder.ui.components.DshSecondaryButton
+import com.ryno.classrecorder.ui.components.GlassPill
+import com.ryno.classrecorder.ui.components.GlassSurface
+import com.ryno.classrecorder.ui.components.ListCardDivider
+import com.ryno.classrecorder.ui.components.ListPageRow
+import com.ryno.classrecorder.ui.components.OverviewCard
+import com.ryno.classrecorder.ui.components.OverviewFooterRow
+import com.ryno.classrecorder.ui.components.OverviewGlyph
+import com.ryno.classrecorder.ui.components.SettingsIcon
+import com.ryno.classrecorder.ui.components.SheetGroup
+import com.ryno.classrecorder.ui.components.StatusChip
+import com.ryno.classrecorder.ui.components.StatusDot
+import com.ryno.classrecorder.ui.theme.AppShape
+import com.ryno.classrecorder.ui.theme.AppSpace
+import com.ryno.classrecorder.ui.theme.ClassRecorderTheme
+import com.ryno.classrecorder.ui.theme.DshMotion
+import com.ryno.classrecorder.ui.theme.GlassTier
+import com.ryno.classrecorder.ui.theme.StatusTone
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Primary lecture capture workspace rebuilt in DSH Go's Mist Glass language:
+ * - Course OverviewCard with MCP footer
+ * - Optional collapsible GlassPill for recent agent tool calls
+ * - Quick course CapsuleChoiceChips when idle
+ * - Mist Glass waveform stage + 48sp Light tabular clock
+ * - Floating Chrome-tier bottom Composer dock
+ */
 @Composable
 fun RecordScreen(
     ui: MainUiState,
@@ -30,244 +98,551 @@ fun RecordScreen(
     onRequestMicPermission: () -> Unit,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
+    onDiscardRecording: () -> Unit,
     onTogglePause: () -> Unit,
     onSelectCourseOverride: (CourseSlot?) -> Unit,
-    onOpenMcpSheet: () -> Unit
+    onOpenMcpSheet: () -> Unit = {},
+    onToggleMcp: () -> Unit = {},
+    onShowMessage: (String) -> Unit = {},
+    topContentInset: Dp = 0.dp,
+    onScrolledUnderChange: (Float) -> Unit = {}
 ) {
+    val density = LocalDensity.current
+    val dsh = ClassRecorderTheme.dshColors
+    val scheme = MaterialTheme.colorScheme
+    val reduced = ClassRecorderTheme.reducedMotion
+    val listState = rememberLazyListState()
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
     var showCoursePicker by remember { mutableStateOf(false) }
+    var showLocalMcpSheet by remember { mutableStateOf(false) }
+    var showDiscardDialog by remember { mutableStateOf(false) }
+    var expandAgentCalls by remember { mutableStateOf(false) }
+
+    val amplitudes = remember { mutableStateListOf<Float>() }
+    LaunchedEffect(recorder.isRecording) {
+        if (!recorder.isRecording) {
+            amplitudes.clear()
+        }
+    }
+    LaunchedEffect(recorder.elapsedMs, recorder.amplitude, recorder.isRecording, recorder.isPaused) {
+        if (recorder.isRecording && !recorder.isPaused) {
+            amplitudes.add(recorder.amplitude.coerceIn(0.04f, 1f))
+            while (amplitudes.size > 96) {
+                amplitudes.removeAt(0)
+            }
+        }
+    }
+
+    val scrollFraction by remember {
+        derivedStateOf {
+            val px = if (listState.firstVisibleItemIndex > 0) {
+                1000f
+            } else {
+                listState.firstVisibleItemScrollOffset.toFloat()
+            }
+            (px / with(density) { 24.dp.toPx() }).coerceIn(0f, 1f)
+        }
+    }
+    LaunchedEffect(scrollFraction) {
+        onScrolledUnderChange(scrollFraction)
+    }
+
+    val distinctCourses = remember(ui.schedule) {
+        ui.schedule?.slots
+            .orEmpty()
+            .flatMap { it.days }
+            .filterNotNull()
+            .filter { it.name.isNotBlank() }
+            .distinctBy { it.name.trim() }
+    }
 
     val activeCourseName = when {
-        recorder.isRecording -> recorder.activeRecording?.courseName ?: "Recording"
+        recorder.isRecording -> recorder.activeRecording?.courseName?.ifBlank { "Uncategorized" } ?: "Recording"
         ui.selectedCourseOverride != null -> ui.selectedCourseOverride.name
         ui.currentClass != null -> ui.currentClass.course.name
         else -> "Uncategorized"
     }
 
-    val activeSubline = when {
+    val (statusTone, statusLabel) = when {
+        recorder.isRecording && recorder.isPaused -> StatusTone.Warn to "Paused"
+        recorder.isRecording -> StatusTone.Error to "Live"
+        ui.selectedCourseOverride != null -> StatusTone.Busy to "Manual"
+        ui.currentClass != null -> {
+            if (ui.currentClass.kind == "upcoming") StatusTone.Busy to "Up next"
+            else StatusTone.Ok to "In class"
+        }
+        else -> StatusTone.Idle to "Ready"
+    }
+
+    val courseMeta = when {
         recorder.isRecording -> {
             val r = recorder.activeRecording
-            listOfNotNull(r?.room?.takeIf { it.isNotBlank() }, r?.teacher?.takeIf { it.isNotBlank() })
-                .joinToString(" • ")
-                .ifBlank { "Saving to $activeCourseName/" }
+            listOfNotNull(
+                r?.slot?.takeIf { it.isNotBlank() }?.let { "P$it" },
+                r?.room?.takeIf { it.isNotBlank() },
+                r?.teacher?.takeIf { it.isNotBlank() }
+            ).joinToString(" · ").ifBlank { "Capturing background audio" }
         }
         ui.selectedCourseOverride != null -> {
             val c = ui.selectedCourseOverride
-            "Manual: ${c.room} ${c.teacher}".trim()
+            listOfNotNull(
+                c.room.takeIf { it.isNotBlank() },
+                c.teacher.takeIf { it.isNotBlank() }
+            ).joinToString(" · ").ifBlank { "Manual class override" }
         }
         ui.currentClass != null -> {
-            val prefix = if (ui.currentClass.kind == "upcoming") "Upcoming" else "In Class Now"
-            "$prefix • Slot ${ui.currentClass.slot} (${ui.currentClass.time}) • ${ui.currentClass.course.room}"
+            val cur = ui.currentClass
+            listOfNotNull(
+                cur.slot.takeIf { it.isNotBlank() }?.let { "P$it" },
+                UiFormatters.formatTimeRange(cur.time).takeIf { it.isNotBlank() },
+                cur.course.room.takeIf { it.isNotBlank() },
+                cur.course.teacher.takeIf { it.isNotBlank() }
+            ).joinToString(" · ")
         }
-        ui.schedule == null -> "No schedule synced yet — tap Schedule tab to import"
-        else -> "No class right now — will save to Uncategorized/"
+        distinctCourses.isNotEmpty() -> "No class in session · Tap to pick a course"
+        else -> "Sync your schedule or record an untagged session"
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
-    ) {
-        // Top status row: Current Class Card + MCP pill
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            AssistChip(
-                onClick = onOpenMcpSheet,
-                label = {
-                    Text(
-                        if (ui.mcpStatus.running) "MCP Active :${ui.mcpStatus.port}"
-                        else "MCP Off"
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = if (ui.mcpStatus.running) Icons.Default.Hub else Icons.Default.PortableWifiOff,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+    val dockReservedHeight = navBottom + 96.dp
+
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val sideInset = ((maxWidth - AppSpace.readingWidth) / 2f).coerceAtLeast(0.dp)
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = AppSpace.gutter + sideInset,
+                end = AppSpace.gutter + sideInset,
+                top = topContentInset + 8.dp,
+                bottom = dockReservedHeight + 16.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item(key = "course_overview") {
+                OverviewCard(
+                    leading = {
+                        OverviewGlyph(
+                            icon = Icons.Rounded.School,
+                            identityKey = activeCourseName
+                        )
+                    },
+                    title = activeCourseName,
+                    subtitle = courseMeta,
+                    trailing = {
+                        StatusChip(
+                            tone = statusTone,
+                            label = statusLabel
+                        )
+                    },
+                    onClick = if (!recorder.isRecording) {
+                        { showCoursePicker = true }
+                    } else null,
+                    footer = {
+                        OverviewFooterRow(
+                            tone = if (ui.mcpStatus.running) StatusTone.Ok else StatusTone.Idle,
+                            text = if (ui.mcpStatus.running) {
+                                "MCP · http://${ui.lanIp}:${ui.mcpStatus.port}/mcp"
+                            } else {
+                                "MCP · Server stopped"
+                            }
+                        )
+                    },
+                    onFooterClick = {
+                        showLocalMcpSheet = true
+                    }
+                )
+            }
+
+            if (ui.mcpStatus.recentCalls.isNotEmpty()) {
+                item(key = "mcp_recent_pill") {
+                    val latest = ui.mcpStatus.recentCalls.last()
+                    GlassPill(
+                        onClick = { expandAgentCalls = !expandAgentCalls },
+                        summary = {
+                            StatusDot(tone = StatusTone.Busy, size = 7.dp)
+                            Text(
+                                text = "Agent · $latest",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = scheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Icon(
+                                imageVector = if (expandAgentCalls) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                contentDescription = if (expandAgentCalls) "Collapse agent activity" else "Expand agent activity",
+                                modifier = Modifier.size(18.dp),
+                                tint = dsh.textTertiary
+                            )
+                        },
+                        expandedContent = if (expandAgentCalls) {
+                            {
+                                ui.mcpStatus.recentCalls.takeLast(5).asReversed().forEach { call ->
+                                    Text(
+                                        text = call,
+                                        style = ClassRecorderTheme.mono.monoSmall,
+                                        color = scheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        } else null
                     )
                 }
-            )
+            }
 
-            ElevatedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = !recorder.isRecording) { showCoursePicker = true },
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = activeCourseName,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = activeSubline,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (!recorder.isRecording) {
-                        FilledTonalIconButton(onClick = { showCoursePicker = true }) {
-                            Icon(Icons.Default.SwapHoriz, contentDescription = "Change class")
+            if (!recorder.isRecording && distinctCourses.isNotEmpty()) {
+                item(key = "quick_courses") {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(vertical = 2.dp)
+                    ) {
+                        item(key = "__auto__") {
+                            CapsuleChoiceChip(
+                                label = if (ui.currentClass != null) {
+                                    "Auto (${ui.currentClass.course.name})"
+                                } else {
+                                    "Auto schedule"
+                                },
+                                selected = ui.selectedCourseOverride == null,
+                                onClick = { onSelectCourseOverride(null) }
+                            )
+                        }
+                        items(
+                            items = distinctCourses,
+                            key = { it.name }
+                        ) { course ->
+                            val (dotBg, _) = dsh.identityPair(course.name)
+                            CapsuleChoiceChip(
+                                label = course.name,
+                                selected = ui.selectedCourseOverride?.name == course.name,
+                                dotColor = dotBg,
+                                onClick = {
+                                    if (ui.selectedCourseOverride?.name == course.name) {
+                                        onSelectCourseOverride(null)
+                                    } else {
+                                        onSelectCourseOverride(course)
+                                    }
+                                }
+                            )
                         }
                     }
                 }
             }
-        }
 
-        // Center timer + live amplitude waveform
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            Text(
-                text = formatDuration(recorder.elapsedMs),
-                style = MaterialTheme.typography.displayLarge,
-                fontWeight = FontWeight.Light,
-                color = if (recorder.isRecording) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurface
-            )
-
-            WaveformBars(
-                amplitude = if (recorder.isRecording && !recorder.isPaused) recorder.amplitude else 0.04f,
-                isActive = recorder.isRecording && !recorder.isPaused
-            )
-
-            if (!hasMicPermission) {
-                FilledTonalButton(onClick = onRequestMicPermission) {
-                    Icon(Icons.Default.Mic, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Grant Microphone Permission")
-                }
+            item(key = "capture_stage") {
+                CaptureStageCard(
+                    recorder = recorder,
+                    amplitudes = amplitudes,
+                    hasMicPermission = hasMicPermission
+                )
             }
         }
 
-        // Bottom Material 3 Record / Pause / Stop controls
-        Row(
+        BackdropVeil(
+            fromTop = false,
+            solidHeight = navBottom + 76.dp,
+            feather = 18.dp,
+            alpha = 0.92f,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
+
+        CaptureComposerDock(
+            isRecording = recorder.isRecording,
+            isPaused = recorder.isPaused,
+            hasMicPermission = hasMicPermission,
+            onRequestMicPermission = onRequestMicPermission,
+            onStart = onStartRecording,
+            onTogglePause = onTogglePause,
+            onFinish = onStopRecording,
+            onDiscard = { showDiscardDialog = true },
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (recorder.isRecording) {
-                FilledTonalIconButton(
-                    onClick = onTogglePause,
-                    modifier = Modifier.size(56.dp)
-                ) {
-                    Icon(
-                        imageVector = if (recorder.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                        contentDescription = if (recorder.isPaused) "Resume" else "Pause"
-                    )
-                }
-                Spacer(Modifier.width(24.dp))
-                LargeFloatingActionButton(
-                    onClick = onStopRecording,
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                    shape = CircleShape
-                ) {
-                    Icon(Icons.Default.Stop, contentDescription = "Stop recording", modifier = Modifier.size(36.dp))
-                }
-            } else {
-                LargeFloatingActionButton(
-                    onClick = {
-                        if (hasMicPermission) onStartRecording() else onRequestMicPermission()
-                    },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    shape = CircleShape
-                ) {
-                    Icon(Icons.Default.Mic, contentDescription = "Start recording", modifier = Modifier.size(36.dp))
-                }
-            }
-        }
+                .align(Alignment.BottomCenter)
+                .padding(
+                    start = AppSpace.floatInset + sideInset,
+                    end = AppSpace.floatInset + sideInset,
+                    bottom = navBottom + AppSpace.floatInset
+                )
+        )
     }
 
     if (showCoursePicker) {
-        val uniqueCourses = remember(ui.schedule) {
-            ui.schedule?.slots
-                ?.flatMap { it.days }
-                ?.filterNotNull()
-                ?.distinctBy { it.name }
-                ?: emptyList()
-        }
-        ModalBottomSheet(onDismissRequest = { showCoursePicker = false }) {
-            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-                Text("Tag Recording to Class", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(12.dp))
-                ListItem(
-                    headlineContent = { Text("Auto-detect from schedule") },
-                    supportingContent = { Text(ui.currentClass?.course?.name ?: "Uncategorized if no class active") },
-                    leadingContent = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
-                    modifier = Modifier.clickable {
-                        onSelectCourseOverride(null)
-                        showCoursePicker = false
+        CoursePickerSheet(
+            courses = distinctCourses,
+            selectedOverride = ui.selectedCourseOverride,
+            currentClassName = ui.currentClass?.course?.name,
+            onSelect = { picked ->
+                onSelectCourseOverride(picked)
+                showCoursePicker = false
+            },
+            onDismiss = { showCoursePicker = false }
+        )
+    }
+
+    if (showLocalMcpSheet) {
+        McpServerSheet(
+            ui = ui,
+            onDismiss = { showLocalMcpSheet = false },
+            onToggleMcp = onToggleMcp,
+            onCopied = onShowMessage
+        )
+    }
+
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title = { Text("Discard recording?") },
+            text = { Text("The current audio capture will be deleted and cannot be recovered.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDiscardDialog = false
+                        onDiscardRecording()
                     }
+                ) {
+                    Text("Discard", color = dsh.danger)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardDialog = false }) {
+                    Text("Keep recording")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun CaptureStageCard(
+    recorder: RecorderState,
+    amplitudes: List<Float>,
+    hasMicPermission: Boolean
+) {
+    val dsh = ClassRecorderTheme.dshColors
+    val mono = ClassRecorderTheme.mono
+    val scheme = MaterialTheme.colorScheme
+    val reduced = ClassRecorderTheme.reducedMotion
+
+    GlassSurface(
+        modifier = Modifier.fillMaxWidth(),
+        tier = GlassTier.Card,
+        shape = AppShape.radiusLg,
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = UiFormatters.formatDuration(if (recorder.isRecording) recorder.elapsedMs else 0L),
+                style = mono.timer,
+                color = when {
+                    !recorder.isRecording -> dsh.textTertiary
+                    recorder.isPaused -> dsh.warning
+                    else -> scheme.onSurface
+                }
+            )
+            Spacer(Modifier.height(6.dp))
+            AnimatedContent(
+                targetState = when {
+                    recorder.isRecording && recorder.isPaused -> "Recording paused"
+                    recorder.isRecording -> "Capturing AAC 128 kbps · .m4a"
+                    !hasMicPermission -> "Microphone permission required before recording"
+                    else -> "Continues cleanly in the background with screen off"
+                },
+                transitionSpec = {
+                    fadeIn(DshMotion.quickTween(reduced)) togetherWith fadeOut(DshMotion.quickTween(reduced))
+                },
+                label = "stageCaption"
+            ) { caption ->
+                Text(
+                    text = caption,
+                    style = mono.timerCaption,
+                    color = dsh.textTertiary,
+                    textAlign = TextAlign.Center
                 )
-                HorizontalDivider()
-                LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
-                    items(uniqueCourses) { course ->
-                        ListItem(
-                            headlineContent = { Text(course.name) },
-                            supportingContent = { Text("${course.teacher} ${course.room}".trim()) },
-                            leadingContent = { Icon(Icons.Default.School, contentDescription = null) },
-                            modifier = Modifier.clickable {
-                                onSelectCourseOverride(course)
-                                showCoursePicker = false
-                            }
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            LiveWaveformCanvas(
+                amplitudes = amplitudes,
+                active = recorder.isRecording,
+                paused = recorder.isPaused,
+                activeColor = if (recorder.isPaused) scheme.primary else dsh.danger,
+                idleColor = scheme.outlineVariant,
+                playheadColor = dsh.danger,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(128.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun CaptureComposerDock(
+    isRecording: Boolean,
+    isPaused: Boolean,
+    hasMicPermission: Boolean,
+    onRequestMicPermission: () -> Unit,
+    onStart: () -> Unit,
+    onTogglePause: () -> Unit,
+    onFinish: () -> Unit,
+    onDiscard: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val dsh = ClassRecorderTheme.dshColors
+    val reduced = ClassRecorderTheme.reducedMotion
+
+    GlassSurface(
+        modifier = modifier.fillMaxWidth(),
+        tier = GlassTier.Chrome,
+        shape = AppShape.radiusXl,
+        contentPadding = PaddingValues(10.dp)
+    ) {
+        AnimatedContent(
+            targetState = isRecording,
+            transitionSpec = {
+                fadeIn(DshMotion.standardTween(reduced)) togetherWith fadeOut(DshMotion.quickTween(reduced))
+            },
+            label = "composerDockState"
+        ) { active ->
+            if (!active) {
+                DshPrimaryButton(
+                    label = if (hasMicPermission) "Start recording" else "Allow microphone",
+                    icon = Icons.Rounded.Mic,
+                    onClick = if (hasMicPermission) onStart else onRequestMicPermission,
+                    minHeight = 52.dp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    GlassSurface(
+                        modifier = Modifier.size(52.dp),
+                        tier = GlassTier.Pill,
+                        circle = true,
+                        onClick = onDiscard
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.DeleteOutline,
+                                contentDescription = "Discard recording",
+                                tint = dsh.danger,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+
+                    if (isPaused) {
+                        DshPrimaryButton(
+                            label = "Resume",
+                            icon = Icons.Rounded.PlayArrow,
+                            onClick = onTogglePause,
+                            minHeight = 52.dp,
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        DshSecondaryButton(
+                            label = "Pause",
+                            icon = Icons.Rounded.Pause,
+                            onClick = onTogglePause,
+                            minHeight = 52.dp,
+                            modifier = Modifier.weight(1f)
                         )
                     }
+
+                    DshPrimaryButton(
+                        label = "Finish",
+                        icon = Icons.Rounded.Stop,
+                        danger = true,
+                        onClick = onFinish,
+                        minHeight = 52.dp,
+                        modifier = Modifier.defaultMinSize(minWidth = 116.dp)
+                    )
                 }
-                Spacer(Modifier.height(24.dp))
             }
         }
     }
 }
 
 @Composable
-private fun WaveformBars(amplitude: Float, isActive: Boolean) {
-    val barCount = 24
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(64.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically
+private fun CoursePickerSheet(
+    courses: List<CourseSlot>,
+    selectedOverride: CourseSlot?,
+    currentClassName: String?,
+    onSelect: (CourseSlot?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    AppSheet(
+        onDismiss = onDismiss,
+        title = "Tag recording course"
     ) {
-        for (i in 0 until barCount) {
-            val factor = 0.35f + 0.65f * kotlin.math.sin((i + 1) * 0.55f).let { kotlin.math.abs(it) }
-            val target by animateFloatAsState(
-                targetValue = if (isActive) (0.12f + amplitude * factor).coerceIn(0.08f, 1f) else 0.08f,
-                label = "bar$i"
-            )
-            Box(
-                modifier = Modifier
-                    .width(6.dp)
-                    .fillMaxHeight(target)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(
-                        if (isActive) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceVariant
-                    )
+        SheetGroup {
+            ListPageRow(
+                title = "Automatic from schedule",
+                subtitle = currentClassName?.let { "Currently matches $it" }
+                    ?: "Uses current timetable slot or Uncategorized",
+                leading = {
+                    SettingsIcon(icon = Icons.Rounded.AutoAwesome, tintSlot = 0)
+                },
+                trailing = if (selectedOverride == null) {
+                    {
+                        Icon(
+                            imageVector = Icons.Rounded.Check,
+                            contentDescription = "Selected",
+                            tint = scheme.primary
+                        )
+                    }
+                } else null,
+                showChevron = false,
+                onClick = { onSelect(null) }
             )
         }
-    }
-}
 
-fun formatDuration(ms: Long): String {
-    val totalSec = (ms / 1000).coerceAtLeast(0)
-    val min = totalSec / 60
-    val sec = totalSec % 60
-    val hr = min / 60
-    return if (hr > 0) String.format("%02d:%02d:%02d", hr, min % 60, sec)
-    else String.format("%02d:%02d", min, sec)
+        if (courses.isNotEmpty()) {
+            SheetGroup(title = "Courses") {
+                courses.forEachIndexed { idx, course ->
+                    if (idx > 0) ListCardDivider(startIndent = 60.dp)
+                    val selected = selectedOverride?.name == course.name
+                    val sub = listOfNotNull(
+                        course.room.takeIf { it.isNotBlank() },
+                        course.teacher.takeIf { it.isNotBlank() }
+                    ).joinToString(" · ").ifBlank { null }
+                    ListPageRow(
+                        title = course.name,
+                        subtitle = sub,
+                        leading = {
+                            SettingsIcon(
+                                icon = Icons.Rounded.School,
+                                identityKey = course.name
+                            )
+                        },
+                        trailing = if (selected) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = "Selected",
+                                    tint = scheme.primary
+                                )
+                            }
+                        } else null,
+                        showChevron = false,
+                        onClick = { onSelect(course) }
+                    )
+                }
+            }
+        }
+    }
 }
