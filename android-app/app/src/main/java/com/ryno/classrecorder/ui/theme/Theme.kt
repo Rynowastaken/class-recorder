@@ -1,50 +1,137 @@
 package com.ryno.classrecorder.ui.theme
 
+import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import com.ryno.classrecorder.ui.DshThemeMode
 
-private val FallbackLight = lightColorScheme(
-    primary = Color(0xFF4F5D95),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFDDE1FF),
-    onPrimaryContainer = Color(0xFF07174E),
-    secondary = Color(0xFF5B5D72),
-    tertiary = Color(0xFF77536D)
-)
+val LocalDshSurfaces = staticCompositionLocalOf { DshSurfaces.dark(AppAccent.Mist) }
+val LocalDshColors = staticCompositionLocalOf { DshColors.Dark }
+val LocalMonoTypography = staticCompositionLocalOf { DshMonoTypography }
 
-private val FallbackDark = darkColorScheme(
-    primary = Color(0xFFB8C4FF),
-    onPrimary = Color(0xFF1F2E64),
-    primaryContainer = Color(0xFF37457B),
-    onPrimaryContainer = Color(0xFFDDE1FF),
-    secondary = Color(0xFFC3C5DD),
-    tertiary = Color(0xFFE6B9D7)
-)
+/**
+ * Resolves the active [AppAccent], deriving a guarded OKLCH palette from
+ * Android 12+ `system_accent1_500` when [accentId] == `"wallpaper"`.
+ */
+@Composable
+fun resolveAppAccent(accentId: String): AppAccent {
+    val context = LocalContext.current
+    if (accentId == AppAccent.WALLPAPER_ID && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val rawArgb = remember(context) {
+            runCatching { ContextCompat.getColor(context, android.R.color.system_accent1_500) }
+                .getOrNull()
+        }
+        if (rawArgb != null) {
+            return remember(rawArgb) { AppAccent.derive(Color(rawArgb)) }
+        }
+    }
+    return AppAccent.preset(accentId)
+}
 
 @Composable
 fun ClassRecorderTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    themeMode: DshThemeMode = DshThemeMode.SYSTEM,
+    accentId: String = AppAccent.Mist.id,
     content: @Composable () -> Unit
 ) {
-    val context = LocalContext.current
-    val colorScheme = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> FallbackDark
-        else -> FallbackLight
+    val systemDark = isSystemInDarkTheme()
+    val isDark = when (themeMode) {
+        DshThemeMode.LIGHT -> false
+        DshThemeMode.DARK -> true
+        DshThemeMode.SYSTEM -> systemDark
+    }
+    val accent = resolveAppAccent(accentId)
+    val reducedMotion = rememberReducedMotion()
+
+    val colorScheme = remember(isDark, accent) {
+        if (isDark) DshPalette.darkScheme(accent) else DshPalette.lightScheme(accent)
+    }
+    val surfaces = remember(isDark, accent) {
+        if (isDark) DshSurfaces.dark(accent) else DshSurfaces.light(accent)
+    }
+    val dshColors = remember(isDark, accent) {
+        DshColors.forAccent(isDark, accent)
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        content = content
-    )
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window ?: return@SideEffect
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !isDark
+                isAppearanceLightNavigationBars = !isDark
+            }
+        }
+    }
+
+    val legacyColors = remember(isDark, dshColors, surfaces, colorScheme) {
+        ClassRecorderColors(
+            recordAccent = dshColors.danger,
+            recordAccentMuted = dshColors.danger.copy(alpha = 0.72f),
+            onRecordAccent = dshColors.onDanger,
+            hairline = colorScheme.outlineVariant,
+            accentWarm = dshColors.warning,
+            courseFallback = colorScheme.primary,
+            pageTop = surfaces.backdropTop,
+            pageBottom = surfaces.backdropBottom
+        )
+    }
+
+    CompositionLocalProvider(
+        LocalDshSurfaces provides surfaces,
+        LocalDshColors provides dshColors,
+        LocalMonoTypography provides DshMonoTypography,
+        LocalReducedMotion provides reducedMotion,
+        LocalClassRecorderColors provides legacyColors
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = DshTypography,
+            shapes = DshMaterialShapes,
+            content = content
+        )
+    }
+}
+
+object ClassRecorderTheme {
+    val surfaces: DshSurfaces
+        @Composable @ReadOnlyComposable
+        get() = LocalDshSurfaces.current
+
+    val dshColors: DshColors
+        @Composable @ReadOnlyComposable
+        get() = LocalDshColors.current
+
+    val mono: MonoTypography
+        @Composable @ReadOnlyComposable
+        get() = LocalMonoTypography.current
+
+    val reducedMotion: Boolean
+        @Composable @ReadOnlyComposable
+        get() = LocalReducedMotion.current
+
+    /** Temporary compatibility accessors removed in Task 5. */
+    val colors: ClassRecorderColors
+        @Composable @ReadOnlyComposable
+        get() = LocalClassRecorderColors.current
+
+    val motion: ExpressionSpecs
+        @Composable @ReadOnlyComposable
+        get() = expressionSpecs()
+
+    val type: ExpressiveType
+        @Composable @ReadOnlyComposable
+        get() = ClassRecorderExpressiveType
 }

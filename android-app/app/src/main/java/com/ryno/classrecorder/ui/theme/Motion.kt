@@ -1,0 +1,70 @@
+package com.ryno.classrecorder.ui.theme
+
+import android.provider.Settings
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.TweenSpec
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.platform.LocalContext
+
+/**
+ * DSH Go motion tokens & system Reduce Motion observer, ported from motion.dart.
+ */
+object DshMotion {
+    const val PRESS_MS = 120
+    const val QUICK_MS = 160
+    const val STANDARD_MS = 240
+    const val COLLAPSE_MS = 280
+    const val EMPHASIZED_MS = 340
+    const val BREATH_MS = 2400
+
+    const val PRESS_SCALE = 0.97f
+
+    val StandardEasing: Easing = FastOutSlowInEasing
+    val GlideEasing: Easing = CubicBezierEasing(0.32f, 0.72f, 0.0f, 1.0f)
+    val SheetRiseEasing: Easing = CubicBezierEasing(0.20f, 0.90f, 0.25f, 1.0f)
+    val CollapseEasing: Easing = CubicBezierEasing(0.65f, 0.0f, 0.35f, 1.0f)
+
+    fun <T> pressSpring(reduced: Boolean = false): FiniteAnimationSpec<T> =
+        if (reduced) tween(0)
+        else spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+
+    fun <T> thumbSpring(reduced: Boolean = false): FiniteAnimationSpec<T> =
+        if (reduced) tween(0)
+        else spring(dampingRatio = 0.84f, stiffness = 520f)
+
+    fun <T> quickTween(reduced: Boolean = false): TweenSpec<T> =
+        tween(durationMillis = if (reduced) 0 else QUICK_MS, easing = StandardEasing)
+
+    fun <T> standardTween(reduced: Boolean = false): TweenSpec<T> =
+        tween(durationMillis = if (reduced) 0 else STANDARD_MS, easing = StandardEasing)
+
+    fun <T> collapseTween(reduced: Boolean = false): TweenSpec<T> =
+        tween(durationMillis = if (reduced) 0 else COLLAPSE_MS, easing = CollapseEasing)
+
+    fun <T> glideTween(reduced: Boolean = false): TweenSpec<T> =
+        tween(durationMillis = if (reduced) 0 else EMPHASIZED_MS, easing = GlideEasing)
+}
+
+val LocalReducedMotion = staticCompositionLocalOf { false }
+
+@Composable
+fun rememberReducedMotion(): Boolean {
+    val context = LocalContext.current
+    return remember(context) {
+        runCatching {
+            Settings.Global.getFloat(
+                context.contentResolver,
+                Settings.Global.ANIMATOR_DURATION_SCALE,
+                1f
+            ) == 0f
+        }.getOrDefault(false)
+    }
+}

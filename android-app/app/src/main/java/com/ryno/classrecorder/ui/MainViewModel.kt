@@ -12,6 +12,7 @@ import com.ryno.classrecorder.core.JsonModels
 import com.ryno.classrecorder.core.McpStatus
 import com.ryno.classrecorder.core.RecordingBridge
 import com.ryno.classrecorder.core.RecordingRecord
+import com.ryno.classrecorder.core.PromotionGrant
 import com.ryno.classrecorder.core.RustCore
 import com.ryno.classrecorder.core.UnifiedSchedule
 import com.ryno.classrecorder.service.RecordingService
@@ -34,13 +35,22 @@ data class MainUiState(
     val mcpStatus: McpStatus = McpStatus(false, 8765, emptyList()),
     val lanIp: String = "127.0.0.1",
     val scheduleSourceInput: String = "https://uni-campus-app.pages.dev/s/qVaaFS5A",
+    val filenameTemplate: String = "{class} {date} - {lesson number}",
+    val dateFormat: String = "yyyy-MM-dd",
+    val themeMode: DshThemeMode = DshThemeMode.SYSTEM,
+    val accentId: String = "mist",
     val isSyncing: Boolean = false,
     val statusMessage: String? = null
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application), RecordingBridge {
 
-    private val _ui = MutableStateFlow(MainUiState())
+    private val _ui = MutableStateFlow(
+        run {
+            val (savedMode, savedAccent) = AppearancePreferences.load(application)
+            MainUiState(themeMode = savedMode, accentId = savedAccent)
+        }
+    )
     val ui = _ui.asStateFlow()
 
     val recorderState = RecordingService.state
@@ -50,12 +60,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application), R
         val recordingsDir = File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "Recordings")
         RustCore.initCore(ctx.filesDir.absolutePath, recordingsDir.absolutePath, this)
 
+        // Ask NotificationManagerService to mark our notifications promotable.
+        // Xposed-free, root-free: this is one binder call made as shell uid via
+        // Shizuku, and it runs off the main thread because pingBinder/transact
+        // are IPC. Failure is non-fatal - the app records fine without it.
+        if (PromotionGrant.isShizukuReady() && PromotionGrant.hasPermission(ctx)) {
+            viewModelScope.launch(Dispatchers.IO) {
+                val ok = PromotionGrant.request(ctx, enable = true)
+                android.util.Log.i("ClassRecorderPromo", "promotion granted=" + ok)
+            }
+        }
+
         RecordingService.onRecordingFinished = {
             refreshAll()
         }
 
-        // Start MCP server automatically on launch so agents can connect immediately
-        RustCore.startMcpServer(8765, "")
+        // Start MCP server automatically on launch so agents can connect immediately.
+        // Wrap it: a second install of this app (e.g. the .uitest package used for
+        // side-by-side UI testing) owns port 8765 already, and a bind failure must
+        // not take down ViewModel init and leave the app unusable.
+        runCatching { RustCore.startMcpServer(8765, "") }
 
         refreshAll()
 
@@ -90,12 +114,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application), R
                 JsonModels.parseMcpStatus(mcpObj.optJSONObject("data"))
             } else McpStatus(false, 8765, emptyList())
 
+            val tmplObj = JSONObject(RustCore.getFilenameTemplate())
+            val savedTmpl = if (tmplObj.optBoolean("ok")) {
+                tmplObj.optJSONObject("data")?.optString("template", "").orEmpty()
+            } else ""
+
+            val fmtObj = JSONObject(RustCore.getDateFormat())
+            val savedFmt = if (fmtObj.optBoolean("ok")) {
+                fmtObj.optJSONObject("data")?.optString("dateFormat", "").orEmpty()
+            } else ""
+
             _ui.value = _ui.value.copy(
                 schedule = sched,
                 currentClass = cur,
                 recordings = recs,
                 mcpStatus = mcp,
                 lanIp = detectLanIp(),
+                filenameTemplate = savedTmpl.ifBlank { "{date}_{time}_{class}_{room}" },
+                dateFormat = savedFmt.ifBlank { "yyyy-MM-dd" },
                 scheduleSourceInput = sched?.sourceUrl?.takeIf { it.isNotBlank() }
                     ?: _ui.value.scheduleSourceInput
             )
@@ -173,6 +209,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application), R
         RecordingService.stop(getApplication())
     }
 
+    fun discardRecording() {
+        RecordingService.discard(getApplication())
+        _ui.value = _ui.value.copy(statusMessage = "Recording discarded")
+    }
+
     fun togglePause() {
         RecordingService.togglePause(getApplication())
     }
@@ -204,6 +245,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application), R
             }
             refreshMcpAndCurrentClass()
         }
+    }
+
+    fun saveFilenameTemplate(template: String, dateFormat: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            RustCore.setFilenameTemplate(template)
+            RustCore.setDateFormat(dateFormat)
+            _ui.value = _ui.value.copy(
+                filenameTemplate = template.ifBlank { "{date}_{time}_{class}_{room}" },
+                dateFormat = dateFormat.ifBlank { "yyyy-MM-dd" },
+                statusMessage = "Filename format saved"
+            )
+        }
+    }
+
+    fun setThemeMode(mode: DshThemeMode) {
+        AppearancePreferences.saveThemeMode(getApplication(), mode)
+        _ui.value = _ui.value.copy(themeMode = mode)
+    }
+
+    fun setAccentId(accentId: String) {
+        val valid = AppearancePreferences.parseAccentId(accentId)
+        AppearancePreferences.saveAccentId(getApplication(), valid)
+        _ui.value = _ui.value.copy(accentId = valid)
+    }
+
+    fun showMessage(msg: String) {
+        _ui.value = _ui.value.copy(statusMessage = msg)
     }
 
     fun clearMessage() {
