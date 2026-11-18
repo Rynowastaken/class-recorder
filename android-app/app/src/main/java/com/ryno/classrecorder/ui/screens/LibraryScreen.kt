@@ -92,6 +92,7 @@ import com.ryno.classrecorder.ui.components.LocalBackdropLayer
 import com.ryno.classrecorder.ui.components.SearchCapsule
 import com.ryno.classrecorder.ui.components.SettingsIcon
 import com.ryno.classrecorder.ui.components.SheetGroup
+import com.ryno.classrecorder.ui.components.rememberSafeSideInsets
 import com.ryno.classrecorder.ui.theme.AppShape
 import com.ryno.classrecorder.ui.theme.AppSpace
 import com.ryno.classrecorder.ui.theme.ClassRecorderTheme
@@ -118,12 +119,9 @@ import java.util.zip.ZipOutputStream
 @Composable
 fun LibraryScreen(
     ui: MainUiState,
-    showMcpSheetInitial: Boolean = false,
-    onDismissMcpSheet: () -> Unit = {},
+    isActiveTab: Boolean = true,
     onToggleMcp: () -> Unit,
-    onUpdateNotes: (String, String, List<String>) -> Unit,
     onDeleteRecording: (String) -> Unit,
-    onSaveFilenameTemplate: (String, String) -> Unit = { _, _ -> },
     onShowMessage: (String) -> Unit = {},
     onOpenPlayback: (RecordingRecord) -> Unit = {},
     topContentInset: Dp = 0.dp,
@@ -142,7 +140,7 @@ fun LibraryScreen(
     var playingId by remember { mutableStateOf<String?>(null) }
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
 
-    var showMcpSheet by remember(showMcpSheetInitial) { mutableStateOf(showMcpSheetInitial) }
+    var showMcpSheet by remember { mutableStateOf(false) }
     var showExportSheet by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var pendingExportCourse by remember { mutableStateOf<String?>(null) }
@@ -161,6 +159,12 @@ fun LibraryScreen(
 
     DisposableEffect(Unit) {
         onDispose { stopInlinePlayer() }
+    }
+
+    LaunchedEffect(isActiveTab) {
+        if (!isActiveTab) {
+            stopInlinePlayer()
+        }
     }
 
     BackHandler(enabled = selectionMode) {
@@ -279,7 +283,7 @@ fun LibraryScreen(
     )
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val sideInset = ((maxWidth - AppSpace.readingWidth) / 2f).coerceAtLeast(0.dp)
+        val (startInset, endInset) = rememberSafeSideInsets(maxWidth)
 
         LazyColumn(
             state = listState,
@@ -292,8 +296,8 @@ fun LibraryScreen(
                     drawLayer(contentBackdropLayer)
                 },
             contentPadding = PaddingValues(
-                start = AppSpace.gutter + sideInset,
-                end = AppSpace.gutter + sideInset,
+                start = AppSpace.gutter + startInset,
+                end = AppSpace.gutter + endInset,
                 top = topContentInset + 8.dp,
                 bottom = bottomDockHeight
             ),
@@ -482,8 +486,8 @@ fun LibraryScreen(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(
-                            start = AppSpace.floatInset + sideInset,
-                            end = AppSpace.floatInset + sideInset,
+                            start = AppSpace.floatInset + startInset,
+                            end = AppSpace.floatInset + endInset,
                             bottom = navBottom + AppSpace.floatInset
                         )
                 )
@@ -513,10 +517,7 @@ fun LibraryScreen(
     if (showMcpSheet) {
         McpServerSheet(
             ui = ui,
-            onDismiss = {
-                showMcpSheet = false
-                onDismissMcpSheet()
-            },
+            onDismiss = { showMcpSheet = false },
             onToggleMcp = onToggleMcp,
             onCopied = onShowMessage
         )
@@ -851,13 +852,17 @@ private suspend fun exportRecordingsToZip(
         val os = context.contentResolver.openOutputStream(destUri)
             ?: return@withContext "Failed to open destination file"
         var exportedCount = 0
+        val usedEntries = mutableSetOf<String>()
         val metaArr = JSONArray()
         ZipOutputStream(os).use { zos ->
             for (rec in recordings) {
                 val f = File(rec.filePath)
                 if (!f.exists()) continue
-                val folder = rec.courseName.ifBlank { "Uncategorized" }
-                val entryName = "$folder/${f.name}"
+                val entryName = UiFormatters.buildUniqueZipEntryPath(
+                    courseName = rec.courseName,
+                    fileName = f.name,
+                    usedEntries = usedEntries
+                )
                 zos.putNextEntry(ZipEntry(entryName))
                 f.inputStream().use { it.copyTo(zos) }
                 zos.closeEntry()

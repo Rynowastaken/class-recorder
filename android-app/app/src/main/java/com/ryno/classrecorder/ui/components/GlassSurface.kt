@@ -199,12 +199,14 @@ fun GlassSurface(
                         )
                     }
                     .drawBehind {
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(surfaces.backdropTop, surfaces.backdropBottom)
-                            )
-                        )
+                        val rootW = max(size.width, layerToDraw.size.width.toFloat())
+                        val rootH = max(size.height, layerToDraw.size.height.toFloat())
                         translate(left = -rootOffset.x, top = -rootOffset.y) {
+                            drawBackdropLayer(
+                                canvasSize = Size(rootW, rootH),
+                                surfaces = surfaces,
+                                glow = true
+                            )
                             drawLayer(layerToDraw)
                         }
                     }

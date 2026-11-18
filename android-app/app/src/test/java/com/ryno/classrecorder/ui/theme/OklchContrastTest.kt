@@ -56,4 +56,31 @@ class OklchContrastTest {
             }
         }
     }
+
+    @Test
+    fun designMdFrontmatterMatchesKotlinThemeTokens() {
+        val designMd = java.io.File("../../DESIGN.md").takeIf { it.exists() }
+            ?: java.io.File("../DESIGN.md")
+        assertTrue("DESIGN.md exists", designMd.exists())
+        val text = designMd.readText()
+        val expectedHexes = listOf(
+            "mist-primary-light: \"#4B67B4\"",
+            "mist-primary-dark: \"#97B1F0\"",
+            "daiqing-seed: \"#236185\"",
+            "dusk-seed: \"#726291\"",
+            "turquoise-seed: \"#34766F\"",
+            "amber-seed: \"#8D6636\"",
+            "graphite-seed: \"#2C2E32\"",
+            "morning-mist-top: \"#EBF1FE\"",
+            "morning-mist-bottom: \"#F6F7FC\"",
+            "morning-mist-ink: \"#1E232E\"",
+            "slate-night-top: \"#1D222C\"",
+            "slate-night-bottom: \"#1B1C23\"",
+            "slate-night-paper: \"#E6E9F0\"",
+            "slate-night-smoke: \"#292E39\""
+        )
+        for (expected in expectedHexes) {
+            assertTrue("DESIGN.md missing $expected", text.contains(expected))
+        }
+    }
 }

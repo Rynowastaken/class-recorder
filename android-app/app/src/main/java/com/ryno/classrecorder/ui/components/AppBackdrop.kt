@@ -2,24 +2,51 @@ package com.ryno.classrecorder.ui.components
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.ryno.classrecorder.ui.theme.AppSpace
 import com.ryno.classrecorder.ui.theme.ClassRecorderTheme
+import com.ryno.classrecorder.ui.theme.DshSurfaces
 import kotlin.math.max
+
+/**
+ * Computes `(startInset, endInset)` combining centered `AppSpace.readingWidth` (`720.dp`)
+ * margins with landscape `displayCutout` and horizontal `navigationBars` safe insets.
+ */
+@Composable
+fun rememberSafeSideInsets(maxWidth: Dp): Pair<Dp, Dp> {
+    val layoutDirection = LocalLayoutDirection.current
+    val safeHorizontal = WindowInsets.displayCutout
+        .union(WindowInsets.navigationBars)
+        .asPaddingValues()
+    val centeredInset = ((maxWidth - AppSpace.readingWidth) / 2f).coerceAtLeast(0.dp)
+    val start = maxOf(centeredInset, safeHorizontal.calculateStartPadding(layoutDirection))
+    val end = maxOf(centeredInset, safeHorizontal.calculateEndPadding(layoutDirection))
+    return start to end
+}
 
 /**
  * Full-bleed DSH Go page backdrop: vertical Mist/Slate gradient + two wide
@@ -39,10 +66,9 @@ fun DshBackdrop(
             .fillMaxSize()
             .drawBehind {
                 drawBackdropLayer(
-                    top = s.backdropTop,
-                    bottom = s.backdropBottom,
-                    glowPrimary = if (glow) s.glowPrimary else null,
-                    glowSecondary = if (glow) s.glowSecondary else null
+                    canvasSize = size,
+                    surfaces = s,
+                    glow = glow
                 )
             },
         content = content
@@ -106,40 +132,42 @@ fun BackdropVeil(
     )
 }
 
-private fun DrawScope.drawBackdropLayer(
-    top: Color,
-    bottom: Color,
-    glowPrimary: Color?,
-    glowSecondary: Color?
+internal fun DrawScope.drawBackdropLayer(
+    canvasSize: Size,
+    surfaces: DshSurfaces,
+    glow: Boolean = true
 ) {
     drawRect(
-        brush = Brush.verticalGradient(colors = listOf(top, bottom))
+        brush = Brush.verticalGradient(
+            colors = listOf(surfaces.backdropTop, surfaces.backdropBottom),
+            startY = 0f,
+            endY = canvasSize.height
+        ),
+        size = canvasSize
     )
-    val longest = max(size.width, size.height)
-    if (glowPrimary != null && longest > 0f) {
-        val center = Offset(size.width * 0.92f, 0f)
-        val radius = longest * 0.62f
+    val longest = max(canvasSize.width, canvasSize.height)
+    if (glow && longest > 0f) {
+        val center1 = Offset(canvasSize.width * 0.92f, 0f)
+        val radius1 = longest * 0.62f
         drawCircle(
             brush = Brush.radialGradient(
-                colors = listOf(glowPrimary, glowPrimary.copy(alpha = 0f)),
-                center = center,
-                radius = radius
+                colors = listOf(surfaces.glowPrimary, surfaces.glowPrimary.copy(alpha = 0f)),
+                center = center1,
+                radius = radius1
             ),
-            radius = radius,
-            center = center
+            radius = radius1,
+            center = center1
         )
-    }
-    if (glowSecondary != null && longest > 0f) {
-        val center = Offset(0f, size.height)
-        val radius = longest * 0.55f
+        val center2 = Offset(0f, canvasSize.height)
+        val radius2 = longest * 0.55f
         drawCircle(
             brush = Brush.radialGradient(
-                colors = listOf(glowSecondary, glowSecondary.copy(alpha = 0f)),
-                center = center,
-                radius = radius
+                colors = listOf(surfaces.glowSecondary, surfaces.glowSecondary.copy(alpha = 0f)),
+                center = center2,
+                radius = radius2
             ),
-            radius = radius,
-            center = center
+            radius = radius2,
+            center = center2
         )
     }
 }

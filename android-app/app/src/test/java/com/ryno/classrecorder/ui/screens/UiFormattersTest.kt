@@ -37,4 +37,25 @@ class UiFormattersTest {
         assertEquals("42 KB", UiFormatters.formatFileSize(42 * 1024L))
         assertEquals("2.5 MB", UiFormatters.formatFileSize((2.5 * 1024 * 1024).toLong()))
     }
+
+    @Test
+    fun sanitizesSlashesAndDeduplicatesZipEntryPaths() {
+        val used = mutableSetOf<String>()
+        assertEquals(
+            "C++_Java/lecture_2026-11-18.m4a",
+            UiFormatters.buildUniqueZipEntryPath("C++/Java", "lecture_2026-11-18.m4a", used)
+        )
+        assertEquals(
+            "C++_Java/lecture_2026-11-18_2.m4a",
+            UiFormatters.buildUniqueZipEntryPath("C++/Java", "lecture_2026-11-18.m4a", used)
+        )
+        assertEquals(
+            "Uncategorized/clip_3.m4a",
+            run {
+                UiFormatters.buildUniqueZipEntryPath("", "clip.m4a", used)
+                UiFormatters.buildUniqueZipEntryPath("  ", "clip.m4a", used)
+                UiFormatters.buildUniqueZipEntryPath("", "clip.m4a", used)
+            }
+        )
+    }
 }

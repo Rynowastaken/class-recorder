@@ -80,7 +80,7 @@ val DshMonoTypography = MonoTypography(
     ),
     seekLabel = TextStyle(
         fontFamily = MonoTypographyFamily,
-        fontWeight = FontWeight.Medium,
+        fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
         lineHeight = 18.sp,
         fontFeatureSettings = TABULAR_FIGURES,

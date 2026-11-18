@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -155,8 +156,9 @@ fun OverviewCard(
                             verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             subtitleAtoms.forEachIndexed { idx, atom ->
+                                val trailingSep = idx < subtitleAtoms.lastIndex
                                 Text(
-                                    text = if (idx == 0) atom else " · $atom",
+                                    text = if (trailingSep) "$atom · " else atom,
                                     style = MaterialTheme.typography.bodyMedium.tabular(),
                                     color = scheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -495,7 +497,7 @@ fun ListPageRow(
                     style = MaterialTheme.typography.bodyLarge.copy(
                         fontSize = 15.sp,
                         lineHeight = 21.sp,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Normal
                     ),
                     color = if (danger) dsh.danger else scheme.onSurface,
                     maxLines = 2,
@@ -566,31 +568,30 @@ fun SettingsSwitchTile(
 ) {
     val haptics = LocalHapticFeedback.current
     val scheme = MaterialTheme.colorScheme
-    val toggle: (() -> Unit)? = if (onCheckedChange != null) {
-        {
-            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            onCheckedChange(!checked)
-        }
-    } else null
+    val toggleModifier = if (onCheckedChange != null) {
+        modifier.toggleable(
+            value = checked,
+            role = Role.Switch,
+            onValueChange = { next ->
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onCheckedChange(next)
+            }
+        )
+    } else modifier
 
     ListPageRow(
         title = title,
         subtitle = subtitle,
-        modifier = modifier,
+        modifier = toggleModifier,
         leading = leading ?: icon?.let {
             { SettingsIcon(icon = it, tintSlot = tintSlot) }
         },
-        onClick = toggle,
+        onClick = null,
         showChevron = false,
         trailing = {
             Switch(
                 checked = checked,
-                onCheckedChange = if (onCheckedChange != null) {
-                    { next ->
-                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onCheckedChange(next)
-                    }
-                } else null,
+                onCheckedChange = null,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = scheme.onPrimary,
                     checkedTrackColor = scheme.primary,

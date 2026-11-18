@@ -75,11 +75,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.activity:activity-compose:1.9.3")
-    // Material 3 1.4.0 is the first stable release with the expressive system:
-    // MaterialExpressiveTheme, MotionScheme, MaterialShapes, split buttons,
-    // button groups, floating toolbar and the expressive loading indicator.
-    // It is NOT in a BOM yet, so the version is pinned directly and the BOM
-    // constraint for material3 is overridden deliberately.
     // Material 3 1.4.0 is the first stable release carrying the expressive
     // system (MaterialExpressiveTheme, MotionScheme, expressive button groups,
     // split buttons, floating toolbar, loading indicator). It is NOT in a BOM

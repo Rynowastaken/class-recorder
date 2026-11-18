@@ -2,31 +2,31 @@
 name: Class Recorder
 description: Calm pocket-sized Mist Glass lecture recorder and on-device MCP workbench for Android.
 colors:
-  mist-primary-light: "#4760AC"
-  mist-primary-dark: "#99B3FF"
-  daiqing-seed: "#245F80"
-  dusk-seed: "#695A87"
-  turquoise-seed: "#2E6D61"
-  amber-seed: "#7D5B30"
-  graphite-seed: "#2E3033"
+  mist-primary-light: "#4B67B4"
+  mist-primary-dark: "#97B1F0"
+  daiqing-seed: "#236185"
+  dusk-seed: "#726291"
+  turquoise-seed: "#34766F"
+  amber-seed: "#8D6636"
+  graphite-seed: "#2C2E32"
   brick-rose-light: "#A54743"
   brick-rose-dark: "#E69089"
   celadon-ok-light: "#337250"
   celadon-ok-dark: "#8BCCA6"
   ochre-warn-light: "#936123"
   ochre-warn-dark: "#E6BD7C"
-  morning-mist-top: "#E9F0FA"
-  morning-mist-bottom: "#F4F6FA"
-  morning-mist-ink: "#1A1E28"
-  morning-mist-secondary: "#454A56"
+  morning-mist-top: "#EBF1FE"
+  morning-mist-bottom: "#F6F7FC"
+  morning-mist-ink: "#1E232E"
+  morning-mist-secondary: "#4F5562"
   morning-mist-tertiary: "#646974"
   morning-mist-code-well: "#EDF0F6"
-  slate-night-top: "#1D222E"
-  slate-night-bottom: "#191B22"
-  slate-night-paper: "#E5E7EE"
-  slate-night-secondary: "#B4B8C4"
+  slate-night-top: "#1D222C"
+  slate-night-bottom: "#1B1C23"
+  slate-night-paper: "#E6E9F0"
+  slate-night-secondary: "#B6BBC5"
   slate-night-tertiary: "#9A9EA9"
-  slate-night-smoke: "#252833"
+  slate-night-smoke: "#292E39"
   slate-night-code-well: "#14171E"
 typography:
   display:
@@ -152,7 +152,7 @@ Both Light ("Morning Mist") and Dark ("Slate Night") themes derive their surface
 
 ## Colors
 
-The palette balances cool atmospheric mist and slate grounds with low-chroma (`C <= 0.14`) OKLCH accents and restrained semantic signals that never shout over lecture metadata.
+The palette balances cool atmospheric mist and slate grounds with low-chroma (`C <= 0.13`) OKLCH accents and restrained semantic signals that never shout over lecture metadata.
 
 ### Primary
 - **Periwinkle Mist** (`mist-primary-light` / `mist-primary-dark`): Default interactive accent used for the active weekday pill on Schedule, playback transport Play/Pause, selected Appearance rings, and active switches. Five sibling OKLCH presets (**Daiqing** `daiqing-seed`, **Dusk** `dusk-seed`, **Turquoise** `turquoise-seed`, **Amber** `amber-seed`, and **Graphite** `graphite-seed`) retint both primary accents and neutral undertones when chosen in Settings.
@@ -171,7 +171,7 @@ The palette balances cool atmospheric mist and slate grounds with low-chroma (`C
 ### Named Rules
 **The Five-Percent Voice Rule.** Primary accent and Brick Rose never flood cards or toolbars; at rest, only the single primary action on screen (the `52dp` circular record trigger on Recorder, the `Now` class mic button on Schedule, or the `Play` capsule on Playback) carries a solid color fill.
 
-**The OKLCH Contrast Guard Rule.** Every preset and wallpaper-derived seed is binary-searched along OKLCH lightness (`L`) with chroma clamped (`C <= 0.14`, neutral `C <= 0.015` when near-achromatic) so `primary` vs `onPrimary` achieves `>= 4.5:1` and `primary` vs `surfaceContainerHighest` achieves `>= 3.0:1` in both Light and Dark modes.
+**The OKLCH Contrast Guard Rule.** Every preset and wallpaper-derived seed is binary-searched along OKLCH lightness (`L`) with chroma clamped (`C <= 0.13`, `AppAccent.MAX_CHROMA`) so `primary` vs `onPrimary` achieves `>= 4.5:1` and `primary` vs `surfaceContainerHighest` achieves `>= 3.0:1` in both Light and Dark modes.
 
 **The Polarity-Aware Course Dot Rule.** Deterministic 8-slot FNV-1a course indicators (`DshColors.courseDot`) render at `L = 0.79` on dark surfaces and `L = 0.45` on light surfaces, inverting automatically on ink-selected filter chips so `4dp–9dp` dots and timetable pips always maintain `>= 3.5:1` non-text contrast.
 
@@ -254,7 +254,7 @@ The geometry uses a five-stop rounded-rectangle ladder (`6dp`, `10dp`, `14dp`, `
 - **Secondary Pages (`AppPage`):** Full-screen push overlays with interactive `PredictiveBackHandler` scaling, pointer-event and accessibility-traversal isolation from background tabs, a scroll-fading `headlineLarge` title or `PageHero` (with `HeroStat` tabular figures), and a compact `titleMedium` bar title rising over a top `BackdropVeil`.
 
 ### Capture Composer Dock
-- **Idle State:** Floating `28dp` `Chrome`-glass dock (`12dp` inset above navigation bar) displaying a tappable course target summary on the left (`9dp` course dot + `Record · <Course>` + `AAC 128 kbps · Tap to change class`) and a `52dp` circular Brick Rose microphone button on the right.
+- **Idle State:** Floating `28dp` `Chrome`-glass dock (`12dp` inset above navigation bar) displaying a tappable course target summary on the left (`9dp` course dot + `Record · <Course>` + `<Course>/<filename>.m4a` live preview) and a `52dp` circular Brick Rose microphone button on the right.
 - **Live / Paused State:** Morphs smoothly inside the same `Chrome` silhouette into a 3-control bar: `52dp` circular `Discard` (`DshConfirmSheet` guarded), flexible `Pause` / `Resume` capsule, and Brick Rose `Finish` capsule.
 
 ## Do's and Don'ts

@@ -7,68 +7,68 @@
       "mist-primary-light": {
         "role": "primary",
         "displayName": "Periwinkle Mist (Light)",
-        "canonical": "oklch(49% 0.125 264)",
-        "tonalRamp": ["#1A254B", "#283971", "#374D92", "#4760AC", "#6E85CB", "#99B3FF", "#C8D6FF", "#EAEEFA"]
+        "canonical": "oklch(53% 0.125 265)",
+        "tonalRamp": ["#213262", "#2E3C5F", "#3D569D", "#4B67B4", "#6E85CB", "#97B1F0", "#D9E4FD", "#DEE8FF"]
       },
       "mist-primary-dark": {
         "role": "primary",
         "displayName": "Periwinkle Mist (Dark)",
-        "canonical": "oklch(78% 0.115 264)",
-        "tonalRamp": ["#192240", "#293868", "#3D5399", "#5873C8", "#7994EA", "#99B3FF", "#C3D2FF", "#ECF0FF"]
+        "canonical": "oklch(76.4% 0.095 265)",
+        "tonalRamp": ["#121C34", "#293144", "#2E3C5F", "#51679D", "#859EDC", "#97B1F0", "#D8E1F6", "#ECF0FF"]
       },
       "daiqing-seed": {
         "role": "primary",
         "displayName": "Daiqing Slate Teal",
-        "canonical": "oklch(46% 0.082 232)",
-        "tonalRamp": ["#122634", "#1B3B50", "#245F80", "#38789B", "#5A98BA", "#84BDD9", "#B8DCEB", "#E6F2F8"]
+        "canonical": "oklch(46.5% 0.085 238)",
+        "tonalRamp": ["#0D1F2B", "#123950", "#145071", "#236185", "#466E88", "#79A6C4", "#8CB9D7", "#DBEAF5"]
       },
       "dusk-seed": {
         "role": "primary",
         "displayName": "Muted Dusk Violet",
-        "canonical": "oklch(49% 0.072 298)",
-        "tonalRamp": ["#221C2E", "#382E4B", "#504369", "#695A87", "#8878A8", "#ACA0C9", "#D2CAE6", "#EFEBF7"]
+        "canonical": "oklch(51% 0.072 295)",
+        "tonalRamp": ["#1F1A29", "#392F4C", "#61517D", "#726291", "#6D6284", "#A598BF", "#B8ABD2", "#EAE5F4"]
       },
       "turquoise-seed": {
         "role": "primary",
         "displayName": "Celadon Turquoise",
-        "canonical": "oklch(49% 0.072 176)",
-        "tonalRamp": ["#112B26", "#1D463E", "#2E6D61", "#458A7D", "#66AA9C", "#8ECBC0", "#BEE4DD", "#E7F5F2"]
+        "canonical": "oklch(52% 0.074 190)",
+        "tonalRamp": ["#0D211F", "#123D39", "#296760", "#34766F", "#47726D", "#7BABA4", "#8DBEB7", "#DBECE9"]
       },
       "amber-seed": {
         "role": "primary",
         "displayName": "Warm Ochre Amber",
-        "canonical": "oklch(49% 0.078 68)",
-        "tonalRamp": ["#2B1E0E", "#473218", "#634624", "#7D5B30", "#9E7849", "#C29D6F", "#E1C9AA", "#F6EDE1"]
+        "canonical": "oklch(53% 0.088 75)",
+        "tonalRamp": ["#271A0C", "#483011", "#7A5528", "#8D6636", "#7F6343", "#B99975", "#CCAC87", "#F2E6D9"]
       },
       "graphite-seed": {
         "role": "primary",
         "displayName": "Achromatic Graphite",
-        "canonical": "oklch(31% 0.005 260)",
-        "tonalRamp": ["#16171A", "#2E3033", "#46494E", "#61656B", "#80848B", "#A3A7AE", "#CACDD3", "#ECEEF1"]
+        "canonical": "oklch(30% 0.008 262)",
+        "tonalRamp": ["#191B1E", "#1D1F23", "#2C2E32", "#3B3D41", "#616368", "#CED1D6", "#DEE1E7", "#E5E8ED"]
       },
       "brick-rose-dark": {
         "role": "secondary",
         "displayName": "Brick Rose Capture",
         "canonical": "oklch(72% 0.105 22)",
-        "tonalRamp": ["#331513", "#542C29", "#7C3935", "#A54743", "#C86B65", "#E69089", "#F3BEB9", "#FCE8E6"]
+        "tonalRamp": ["#331513", "#542C29", "#642724", "#A54743", "#C86B65", "#E69089", "#F8D9D7", "#FFE2E0"]
       },
       "celadon-ok-dark": {
         "role": "tertiary",
         "displayName": "Celadon Active",
         "canonical": "oklch(78% 0.088 152)",
-        "tonalRamp": ["#0C2518", "#233F2F", "#337250", "#4D8F6B", "#6CAE88", "#8BCCA6", "#BCE2CB", "#E6F5EC"]
+        "tonalRamp": ["#0C2518", "#153F29", "#233F2F", "#337250", "#6CAE88", "#8BCCA6", "#C9E7D4", "#D9F0E1"]
       },
       "slate-night-top": {
         "role": "neutral",
         "displayName": "Slate Night Ground",
-        "canonical": "oklch(25% 0.022 264)",
-        "tonalRamp": ["#14171E", "#191B22", "#1D222E", "#252833", "#323644", "#656971", "#9A9EA9", "#E5E7EE"]
+        "canonical": "oklch(25% 0.022 265)",
+        "tonalRamp": ["#14171E", "#1B1C23", "#1D222C", "#292E39", "#343944", "#656971", "#9A9EA9", "#E6E9F0"]
       },
       "morning-mist-top": {
         "role": "neutral",
         "displayName": "Morning Mist Ground",
-        "canonical": "oklch(95% 0.014 255)",
-        "tonalRamp": ["#1A1E28", "#454A56", "#646974", "#A1A5AC", "#DBDEE5", "#E9F0FA", "#F4F6FA", "#FFFFFF"]
+        "canonical": "oklch(95.5% 0.015 265)",
+        "tonalRamp": ["#1E232E", "#4F5562", "#646974", "#A1A5AC", "#DCE0E8", "#EBF1FE", "#F6F7FC", "#FBFCFF"]
       }
     },
     "typographyMeta": {
@@ -210,7 +210,7 @@
       },
       {
         "name": "The OKLCH Contrast Guard Rule",
-        "body": "Every preset and wallpaper-derived seed is binary-searched along OKLCH lightness (L) with chroma clamped (C <= 0.14, neutral C <= 0.015 when near-achromatic) so primary vs onPrimary achieves >= 4.5:1 and primary vs surfaceContainerHighest achieves >= 3.0:1 in both Light and Dark modes.",
+        "body": "Every preset and wallpaper-derived seed is binary-searched along OKLCH lightness (L) with chroma clamped (C <= 0.13, AppAccent.MAX_CHROMA) so primary vs onPrimary achieves >= 4.5:1 and primary vs surfaceContainerHighest achieves >= 3.0:1 in both Light and Dark modes.",
         "section": "colors"
       },
       {

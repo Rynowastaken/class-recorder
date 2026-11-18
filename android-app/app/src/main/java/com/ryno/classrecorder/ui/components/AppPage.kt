@@ -132,7 +132,7 @@ fun AppPage(
             }
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val sideInset = ((maxWidth - AppSpace.readingWidth) / 2f).coerceAtLeast(0.dp)
+            val (startInset, endInset) = rememberSafeSideInsets(maxWidth)
 
             LazyColumn(
                 state = listState,
@@ -145,8 +145,8 @@ fun AppPage(
                         drawLayer(backdropLayer)
                     },
                 contentPadding = PaddingValues(
-                    start = sideInset,
-                    end = sideInset,
+                    start = startInset,
+                    end = endInset,
                     top = topReserved,
                     bottom = navBottom + 44.dp
                 )
@@ -220,7 +220,10 @@ fun AppPage(
                         .padding(top = statusTop)
                         .fillMaxWidth()
                         .height(barHeight)
-                        .padding(horizontal = AppSpace.floatInset + sideInset),
+                        .padding(
+                            start = AppSpace.floatInset + startInset,
+                            end = AppSpace.floatInset + endInset
+                        ),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     GlassIconButton(

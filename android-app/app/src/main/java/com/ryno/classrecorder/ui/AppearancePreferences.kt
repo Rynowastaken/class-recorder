@@ -9,9 +9,10 @@ object AppearancePreferences {
     private const val PREFS_NAME = "dsh_appearance"
     private const val KEY_THEME_MODE = "theme_mode"
     private const val KEY_ACCENT_ID = "accent_id"
+    private const val KEY_LAST_PRESET_ID = "last_preset_id"
 
-    private val validAccentIds: Set<String> =
-        AppAccent.presets.map { it.id }.toSet() + AppAccent.WALLPAPER_ID
+    private val presetIds: Set<String> = AppAccent.presets.map { it.id }.toSet()
+    private val validAccentIds: Set<String> = presetIds + AppAccent.WALLPAPER_ID
 
     fun parseThemeMode(raw: String?): DshThemeMode {
         val cleaned = raw?.trim()?.uppercase().orEmpty()
@@ -30,6 +31,12 @@ object AppearancePreferences {
         return mode to accentId
     }
 
+    fun loadLastPresetId(context: Context): String {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val raw = prefs.getString(KEY_LAST_PRESET_ID, null)?.trim()?.lowercase().orEmpty()
+        return if (raw in presetIds) raw else AppAccent.Mist.id
+    }
+
     fun saveThemeMode(context: Context, mode: DshThemeMode) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
@@ -39,9 +46,11 @@ object AppearancePreferences {
 
     fun saveAccentId(context: Context, accentId: String) {
         val valid = parseAccentId(accentId)
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
+        val editor = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
             .putString(KEY_ACCENT_ID, valid)
-            .apply()
+        if (valid in presetIds) {
+            editor.putString(KEY_LAST_PRESET_ID, valid)
+        }
+        editor.apply()
     }
 }

@@ -11,6 +11,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.content.ContextCompat
@@ -28,8 +29,9 @@ val LocalMonoTypography = staticCompositionLocalOf { DshMonoTypography }
 @Composable
 fun resolveAppAccent(accentId: String): AppAccent {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
     if (accentId == AppAccent.WALLPAPER_ID && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val rawArgb = remember(context) {
+        val rawArgb = remember(context, configuration) {
             runCatching { ContextCompat.getColor(context, android.R.color.system_accent1_500) }
                 .getOrNull()
         }

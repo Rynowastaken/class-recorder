@@ -117,6 +117,39 @@ object UiFormatters {
     }
 
     /**
+     * Sanitizes `/` and `\` in [courseName] and disambiguates colliding archive entry paths
+     * (`_2`, `_3`, ...) so `ZipOutputStream` never throws `ZipException: duplicate entry`.
+     */
+    fun buildUniqueZipEntryPath(
+        courseName: String,
+        fileName: String,
+        usedEntries: MutableSet<String>
+    ): String {
+        val safeFolder = courseName.trim()
+            .ifBlank { "Uncategorized" }
+            .replace('/', '_')
+            .replace('\\', '_')
+            .trim('.')
+            .ifBlank { "Uncategorized" }
+        val safeFile = fileName.trim()
+            .replace('/', '_')
+            .replace('\\', '_')
+            .ifBlank { "recording.m4a" }
+
+        val dotIdx = safeFile.lastIndexOf('.')
+        val stem = if (dotIdx > 0) safeFile.substring(0, dotIdx) else safeFile
+        val ext = if (dotIdx > 0) safeFile.substring(dotIdx) else ""
+
+        var candidate = "$safeFolder/$safeFile"
+        var suffix = 2
+        while (!usedEntries.add(candidate)) {
+            candidate = "$safeFolder/${stem}_$suffix$ext"
+            suffix++
+        }
+        return candidate
+    }
+
+    /**
      * Deterministically previews `.m4a` filenames against `2026-11-18`, supporting all
      * RustCore template placeholders (including `{lesson number}` and `{lession number}`).
      */

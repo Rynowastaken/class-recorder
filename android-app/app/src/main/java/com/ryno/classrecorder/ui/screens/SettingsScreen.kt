@@ -75,6 +75,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.ryno.classrecorder.ui.AppearancePreferences
 import com.ryno.classrecorder.ui.DshThemeMode
 import com.ryno.classrecorder.ui.MainUiState
 import com.ryno.classrecorder.ui.components.AppPage
@@ -163,7 +164,8 @@ fun SettingsScreen(
     var dateFormatInput by rememberSaveable(ui.dateFormat) { mutableStateOf(ui.dateFormat) }
     var lastPresetId by rememberSaveable {
         mutableStateOf(
-            if (ui.accentId != AppAccent.WALLPAPER_ID) ui.accentId else AppAccent.Mist.id
+            if (ui.accentId != AppAccent.WALLPAPER_ID) ui.accentId
+            else AppearancePreferences.loadLastPresetId(context)
         )
     }
 
@@ -617,7 +619,7 @@ private fun ModePreviewTile(
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium.copy(
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
             ),
             color = labelColor,
             maxLines = 1,
@@ -812,7 +814,7 @@ private fun AccentSwatchItem(
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
             ),
             color = labelColor,
             maxLines = 1

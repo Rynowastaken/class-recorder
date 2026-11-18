@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -94,7 +95,8 @@ fun PlaybackScreen(
     recording: RecordingRecord,
     onDismiss: () -> Unit,
     onUpdateNotes: (String, String, List<String>) -> Unit,
-    onDeleteRecording: (String) -> Unit
+    onDeleteRecording: (String) -> Unit,
+    onShowMessage: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -132,50 +134,60 @@ fun PlaybackScreen(
         decodedPeaks = AudioWaveformDecoder.extractPeaks(recording.filePath, bucketCount = 72)
     }
 
-    val mediaPlayer = remember(recording.id) {
-        MediaPlayer().apply {
-            runCatching {
-                setDataSource(recording.filePath)
-                prepare()
-                durationMs = duration.toLong().coerceAtLeast(1L)
-                setOnCompletionListener {
-                    isPlaying = false
-                    currentPosMs = durationMs
-                }
-            }
-        }
-    }
+    var mediaPlayerRef by remember(recording.id) { mutableStateOf<MediaPlayer?>(null) }
+    var isPrepared by remember(recording.id) { mutableStateOf(false) }
 
-    DisposableEffect(recording.id) {
+    DisposableEffect(recording.id, recording.filePath) {
+        val mp = MediaPlayer()
+        mediaPlayerRef = mp
+        isPrepared = false
+        runCatching {
+            mp.setDataSource(recording.filePath)
+            mp.setOnPreparedListener { prepared ->
+                durationMs = prepared.duration.toLong().coerceAtLeast(1L)
+                isPrepared = true
+            }
+            mp.setOnCompletionListener {
+                isPlaying = false
+                currentPosMs = durationMs
+            }
+            mp.prepareAsync()
+        }
         onDispose {
-            runCatching { if (mediaPlayer.isPlaying) mediaPlayer.stop() }
-            runCatching { mediaPlayer.release() }
+            isPrepared = false
+            isPlaying = false
+            mediaPlayerRef = null
+            runCatching { if (mp.isPlaying) mp.stop() }
+            runCatching { mp.release() }
         }
     }
 
     LaunchedEffect(recording.id, isPlaying) {
         while (isPlaying) {
-            runCatching {
-                currentPosMs = mediaPlayer.currentPosition.toLong().coerceIn(0L, durationMs)
+            val mp = mediaPlayerRef
+            if (mp != null && isPrepared) {
+                runCatching {
+                    currentPosMs = mp.currentPosition.toLong().coerceIn(0L, durationMs)
+                }
             }
             delay(32L)
         }
     }
 
     fun togglePlayPause() {
+        val mp = mediaPlayerRef ?: return
+        if (!isPrepared) return
         runCatching {
-            if (mediaPlayer.isPlaying) {
-                mediaPlayer.pause()
+            if (mp.isPlaying) {
+                mp.pause()
                 isPlaying = false
             } else {
                 if (currentPosMs >= durationMs - 150L) {
-                    mediaPlayer.seekTo(0)
+                    mp.seekTo(0)
                     currentPosMs = 0L
                 }
-                mediaPlayer.start()
-                if (speed != 1.0f) {
-                    mediaPlayer.playbackParams = PlaybackParams().setSpeed(speed)
-                }
+                mp.playbackParams = PlaybackParams().setSpeed(speed)
+                mp.start()
                 isPlaying = true
             }
         }
@@ -183,18 +195,20 @@ fun PlaybackScreen(
 
     fun seekTo(targetMs: Long) {
         val clamped = targetMs.coerceIn(0L, durationMs)
-        runCatching {
-            mediaPlayer.seekTo(clamped.toInt())
-            currentPosMs = clamped
+        currentPosMs = clamped
+        val mp = mediaPlayerRef ?: return
+        if (isPrepared) {
+            runCatching { mp.seekTo(clamped.toInt()) }
         }
     }
 
     fun applySpeed(next: Float) {
         speed = next
-        runCatching {
-            val wasPlaying = mediaPlayer.isPlaying
-            mediaPlayer.playbackParams = PlaybackParams().setSpeed(next)
-            if (!wasPlaying) mediaPlayer.pause()
+        val mp = mediaPlayerRef ?: return
+        if (isPrepared && mp.isPlaying) {
+            runCatching {
+                mp.playbackParams = PlaybackParams().setSpeed(next)
+            }
         }
     }
 
@@ -415,6 +429,7 @@ fun PlaybackScreen(
                         text = fileName,
                         onCopy = {
                             UiFormatters.copyToClipboard(context, "Filename", fileName)
+                            onShowMessage("Copied filename")
                         }
                     )
 
@@ -450,7 +465,7 @@ fun PlaybackScreen(
             danger = true,
             onConfirm = {
                 showDeleteDialog = false
-                runCatching { if (mediaPlayer.isPlaying) mediaPlayer.stop() }
+                runCatching { mediaPlayerRef?.let { if (it.isPlaying) it.stop() } }
                 onDeleteRecording(recording.id)
                 onDismiss()
             },
@@ -528,27 +543,32 @@ private fun NotesEditorSheet(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     tags.forEach { tag ->
-                        GlassSurface(
-                            tier = GlassTier.Pill,
-                            stadium = true,
-                            onClick = { tags.remove(tag) },
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        Box(
+                            modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            GlassSurface(
+                                tier = GlassTier.Pill,
+                                stadium = true,
+                                onClick = { tags.remove(tag) },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp)
                             ) {
-                                Text(
-                                    text = "#$tag",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = if (surfaces.darkTheme) scheme.onSurface else scheme.onSurfaceVariant
-                                )
-                                Icon(
-                                    imageVector = Icons.Rounded.Close,
-                                    contentDescription = "Remove $tag",
-                                    modifier = Modifier.size(14.dp),
-                                    tint = scheme.onSurfaceVariant
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = "#$tag",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (surfaces.darkTheme) scheme.onSurface else scheme.onSurfaceVariant
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Rounded.Close,
+                                        contentDescription = "Remove $tag",
+                                        modifier = Modifier.size(14.dp),
+                                        tint = scheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }

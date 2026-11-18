@@ -71,6 +71,7 @@ import com.ryno.classrecorder.ui.components.EmptyView
 import com.ryno.classrecorder.ui.components.GlassIconButton
 import com.ryno.classrecorder.ui.components.GlassSurface
 import com.ryno.classrecorder.ui.components.StatusChip
+import com.ryno.classrecorder.ui.components.rememberSafeSideInsets
 import com.ryno.classrecorder.ui.theme.AppShape
 import com.ryno.classrecorder.ui.theme.AppSpace
 import com.ryno.classrecorder.ui.theme.ClassRecorderTheme
@@ -168,14 +169,14 @@ fun ScheduleScreen(
     val todayCount = dayCoursesByIndex.getOrElse(todayIndex) { emptyList() }.size
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val sideInset = ((maxWidth - AppSpace.readingWidth) / 2f).coerceAtLeast(0.dp)
+        val (startInset, endInset) = rememberSafeSideInsets(maxWidth)
 
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = AppSpace.gutter + sideInset,
-                end = AppSpace.gutter + sideInset,
+                start = AppSpace.gutter + startInset,
+                end = AppSpace.gutter + endInset,
                 top = topContentInset + 8.dp,
                 bottom = navBottom + 44.dp
             ),

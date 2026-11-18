@@ -38,6 +38,7 @@ import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.MicOff
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.School
@@ -91,6 +92,7 @@ import com.ryno.classrecorder.ui.components.SettingsIcon
 import com.ryno.classrecorder.ui.components.SheetGroup
 import com.ryno.classrecorder.ui.components.StatusChip
 import com.ryno.classrecorder.ui.components.StatusDot
+import com.ryno.classrecorder.ui.components.rememberSafeSideInsets
 import com.ryno.classrecorder.ui.theme.AppShape
 import com.ryno.classrecorder.ui.theme.AppSpace
 import com.ryno.classrecorder.ui.theme.ClassRecorderTheme
@@ -118,7 +120,6 @@ fun RecordScreen(
     onDiscardRecording: () -> Unit,
     onTogglePause: () -> Unit,
     onSelectCourseOverride: (CourseSlot?) -> Unit,
-    onOpenMcpSheet: () -> Unit = {},
     onToggleMcp: () -> Unit = {},
     onShowMessage: (String) -> Unit = {},
     topContentInset: Dp = 0.dp,
@@ -228,10 +229,40 @@ fun RecordScreen(
         else -> "Sync your schedule or record an untagged session"
     }
 
+    val activeRoom = when {
+        ui.selectedCourseOverride != null -> ui.selectedCourseOverride.room
+        ui.currentClass != null -> ui.currentClass.course.room
+        else -> ""
+    }
+    val activeTeacher = when {
+        ui.selectedCourseOverride != null -> ui.selectedCourseOverride.teacher
+        ui.currentClass != null -> ui.currentClass.course.teacher
+        else -> ""
+    }
+    val activeSlot = ui.currentClass?.slot.orEmpty()
+    val targetPathPreview = remember(
+        ui.filenameTemplate,
+        ui.dateFormat,
+        activeCourseName,
+        activeRoom,
+        activeTeacher,
+        activeSlot
+    ) {
+        val filePreview = UiFormatters.previewFilename(
+            template = ui.filenameTemplate,
+            dateFormat = ui.dateFormat,
+            courseName = activeCourseName,
+            room = activeRoom.ifBlank { "Room" },
+            teacher = activeTeacher.ifBlank { "Instructor" },
+            slot = activeSlot.ifBlank { "1" }
+        )
+        "$activeCourseName/$filePreview"
+    }
+
     val dockReservedHeight = navBottom + 96.dp
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val sideInset = ((maxWidth - AppSpace.readingWidth) / 2f).coerceAtLeast(0.dp)
+        val (startInset, endInset) = rememberSafeSideInsets(maxWidth)
 
         LazyColumn(
             state = listState,
@@ -244,13 +275,51 @@ fun RecordScreen(
                     drawLayer(contentBackdropLayer)
                 },
             contentPadding = PaddingValues(
-                start = AppSpace.gutter + sideInset,
-                end = AppSpace.gutter + sideInset,
+                start = AppSpace.gutter + startInset,
+                end = AppSpace.gutter + endInset,
                 top = topContentInset + 8.dp,
                 bottom = dockReservedHeight + 20.dp
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            if (!hasMicPermission && !recorder.isRecording) {
+                item(key = "mic_permission_banner") {
+                    GlassSurface(
+                        modifier = Modifier.fillMaxWidth(),
+                        tier = GlassTier.Card,
+                        shape = AppShape.radiusMd,
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            SettingsIcon(
+                                icon = Icons.Rounded.MicOff,
+                                danger = true
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Microphone access needed",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = scheme.onSurface
+                                )
+                                Text(
+                                    text = "Grant audio permission to capture classroom lectures.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = dsh.textTertiary
+                                )
+                            }
+                            DshSecondaryButton(
+                                label = "Allow microphone",
+                                onClick = onRequestMicPermission
+                            )
+                        }
+                    }
+                }
+            }
+
             item(key = "course_overview") {
                 OverviewCard(
                     leading = {
@@ -263,10 +332,22 @@ fun RecordScreen(
                     subtitle = fallbackSubtitle,
                     subtitleAtoms = courseAtoms,
                     titleBadge = {
-                        StatusChip(
-                            tone = statusTone,
-                            label = statusLabel
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (ui.selectedCourseOverride != null && !recorder.isRecording) {
+                                StatusChip(
+                                    tone = StatusTone.Idle,
+                                    label = "Auto",
+                                    onClick = { onSelectCourseOverride(null) }
+                                )
+                            }
+                            StatusChip(
+                                tone = statusTone,
+                                label = statusLabel
+                            )
+                        }
                     },
                     onClick = if (!recorder.isRecording) {
                         { showCoursePicker = true }
@@ -384,6 +465,7 @@ fun RecordScreen(
         CompositionLocalProvider(LocalBackdropLayer provides contentBackdropLayer) {
             CaptureComposerDock(
                 activeCourseName = activeCourseName,
+                targetPathPreview = targetPathPreview,
                 isRecording = recorder.isRecording,
                 isPaused = recorder.isPaused,
                 hasMicPermission = hasMicPermission,
@@ -396,8 +478,8 @@ fun RecordScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(
-                        start = AppSpace.floatInset + sideInset,
-                        end = AppSpace.floatInset + sideInset,
+                        start = AppSpace.floatInset + startInset,
+                        end = AppSpace.floatInset + endInset,
                         bottom = navBottom + AppSpace.floatInset
                     )
             )
@@ -499,7 +581,7 @@ private fun CaptureStageCard(
                 amplitudes = amplitudes,
                 active = recorder.isRecording,
                 paused = recorder.isPaused,
-                activeColor = if (recorder.isPaused) scheme.primary else dsh.danger,
+                activeColor = if (recorder.isPaused) dsh.textTertiary else dsh.danger,
                 idleColor = dsh.textTertiary,
                 playheadColor = dsh.danger,
                 modifier = Modifier
@@ -518,6 +600,7 @@ private fun CaptureStageCard(
 @Composable
 private fun CaptureComposerDock(
     activeCourseName: String,
+    targetPathPreview: String,
     isRecording: Boolean,
     isPaused: Boolean,
     hasMicPermission: Boolean,
@@ -593,11 +676,11 @@ private fun CaptureComposerDock(
                             )
                             Text(
                                 text = if (hasMicPermission) {
-                                    "AAC 128 kbps · Tap to change class"
+                                    targetPathPreview
                                 } else {
                                     "Tap mic to allow audio permission"
                                 },
-                                style = MaterialTheme.typography.bodySmall,
+                                style = ClassRecorderTheme.mono.monoSmall,
                                 color = dsh.textTertiary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
