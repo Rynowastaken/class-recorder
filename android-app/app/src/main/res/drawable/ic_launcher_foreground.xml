@@ -1,0 +1,30 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Subtle outer halo ring -->
+    <path
+        android:fillColor="#FADAD6"
+        android:pathData="M54,54m-31,0a31,31 0,1 1,62 0a31,31 0,1 1,-62 0" />
+    <!-- Pixel Recorder red badge -->
+    <path
+        android:fillColor="#D93025"
+        android:pathData="M54,54m-25,0a25,25 0,1 1,50 0a25,25 0,1 1,-50 0" />
+    <!-- 5 crisp white rounded waveform bars -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M39,49a2,2 0 0,1 4,0v10a2,2 0 0,1 -4,0z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M45.5,43a2,2 0 0,1 4,0v22a2,2 0 0,1 -4,0z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M52,38a2,2 0 0,1 4,0v32a2,2 0 0,1 -4,0z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M58.5,44a2,2 0 0,1 4,0v20a2,2 0 0,1 -4,0z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M65,48a2,2 0 0,1 4,0v12a2,2 0 0,1 -4,0z" />
+</vector>
