@@ -262,6 +262,18 @@ impl Storage {
         .map_err(|e| format!("Failed to set setting: {e}"))?;
         Ok(())
     }
+
+    pub fn count_course_recordings(&self, course_name: &str) -> Result<usize, String> {
+        let conn = self.conn.lock().map_err(|_| "Storage lock poisoned")?;
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM recordings WHERE course_name = ?1",
+                params![course_name],
+                |row| row.get(0),
+            )
+            .map_err(|e| format!("Failed to count recordings: {e}"))?;
+        Ok(count.max(0) as usize)
+    }
 }
 
 fn row_to_recording(row: &rusqlite::Row<'_>) -> rusqlite::Result<RecordingRecord> {
@@ -308,22 +320,111 @@ pub fn build_recording_path(
     course: Option<&CurrentClassMatch>,
     dt: NaiveDateTime,
 ) -> PathBuf {
-    let stamp = dt.format("%Y-%m-%d_%H%M").to_string();
-    match course {
-        Some(m) if !m.course.name.trim().is_empty() => {
-            let folder = sanitize_segment(&m.course.name);
-            let room_seg = sanitize_segment(&m.course.room);
-            let filename = if m.course.room.trim().is_empty() {
-                format!("{stamp}_{folder}.m4a")
-            } else {
-                format!("{stamp}_{folder}_{room_seg}.m4a")
-            };
-            base_dir.join(folder).join(filename)
-        }
-        _ => base_dir
-            .join("Uncategorized")
-            .join(format!("{stamp}_Recording.m4a")),
+    build_recording_path_with_template(base_dir, course, dt, None, 1)
+}
+
+/// Formats a NaiveDateTime according to a named/pattern date format.
+pub fn format_date_with_pattern(dt: NaiveDateTime, date_format: Option<&str>) -> String {
+    match date_format.map(str::trim).unwrap_or("yyyy-MM-dd") {
+        "yyyyMMdd" => dt.format("%Y%m%d").to_string(),
+        "MM-dd" => dt.format("%m-%d").to_string(),
+        "dd-MM-yyyy" => dt.format("%d-%m-%Y").to_string(),
+        "yyyy.MM.dd" => dt.format("%Y.%m.%d").to_string(),
+        "MM.dd" => dt.format("%m.%d").to_string(),
+        "MMM dd" => dt.format("%b %d").to_string(),
+        "yyyy-MM-dd EEE" => dt.format("%Y-%m-%d %a").to_string(),
+        _ => dt.format("%Y-%m-%d").to_string(),
     }
+}
+
+/// Builds a recording path using an optional custom filename template such as
+/// `{class} {date} - {lesson number}`.
+pub fn build_recording_path_with_template(
+    base_dir: &Path,
+    course: Option<&CurrentClassMatch>,
+    dt: NaiveDateTime,
+    template: Option<&str>,
+    lesson_number: usize,
+) -> PathBuf {
+    build_recording_path_with_options(base_dir, course, dt, template, None, lesson_number)
+}
+
+pub fn build_recording_path_with_options(
+    base_dir: &Path,
+    course: Option<&CurrentClassMatch>,
+    dt: NaiveDateTime,
+    template: Option<&str>,
+    date_format: Option<&str>,
+    lesson_number: usize,
+) -> PathBuf {
+    let date_str = format_date_with_pattern(dt, date_format);
+    let time_str = dt.format("%H%M").to_string();
+    let year_str = dt.format("%Y").to_string();
+    let month_str = dt.format("%m").to_string();
+    let day_str = dt.format("%d").to_string();
+    let weekday_str = dt.format("%a").to_string();
+
+    let (folder, class_name, room, teacher, slot) = match course {
+        Some(m) if !m.course.name.trim().is_empty() => (
+            sanitize_segment(&m.course.name),
+            m.course.name.trim().to_string(),
+            m.course.room.trim().to_string(),
+            m.course.teacher.trim().to_string(),
+            m.slot.trim().to_string(),
+        ),
+        _ => (
+            "Uncategorized".to_string(),
+            "Uncategorized".to_string(),
+            String::new(),
+            String::new(),
+            String::new(),
+        ),
+    };
+
+    let custom = template.map(str::trim).filter(|s| !s.is_empty());
+    let stem = if let Some(tmpl) = custom {
+        let mut out = tmpl.to_string();
+        for key in ["{class}", "{course}"] {
+            out = out.replace(key, &class_name);
+        }
+        out = out.replace("{date}", &date_str);
+        out = out.replace("{year}", &year_str);
+        out = out.replace("{month}", &month_str);
+        out = out.replace("{day}", &day_str);
+        out = out.replace("{weekday}", &weekday_str);
+        out = out.replace("{time}", &time_str);
+        out = out.replace("{room}", &room);
+        out = out.replace("{teacher}", &teacher);
+        out = out.replace("{slot}", &slot);
+        let lesson_str = lesson_number.max(1).to_string();
+        for key in [
+            "{lesson number}",
+            "{lesson_number}",
+            "{lesson}",
+            "{lession number}",
+            "{lession_number}",
+            "{lession}",
+        ] {
+            out = out.replace(key, &lesson_str);
+        }
+        let cleaned = sanitize_segment(&out);
+        if cleaned.is_empty() || cleaned == "Uncategorized" && class_name != "Uncategorized" {
+            format!("{date_str}_{time_str}_{folder}")
+        } else {
+            cleaned
+        }
+    } else if class_name != "Uncategorized" {
+        let room_seg = sanitize_segment(&room);
+        if room.is_empty() {
+            format!("{date_str}_{time_str}_{folder}")
+        } else {
+            format!("{date_str}_{time_str}_{folder}_{room_seg}")
+        }
+    } else {
+        format!("{date_str}_{time_str}_Recording")
+    };
+
+    base_dir.join(folder).join(format!("{stem}.m4a"))
 }
 
 #[cfg(test)]
@@ -360,6 +461,50 @@ mod tests {
         assert_eq!(
             p_none,
             PathBuf::from("/recordings/Uncategorized/2026-11-13_0810_Recording.m4a")
+        );
+    }
+
+    #[test]
+    fn test_custom_filename_template() {
+        let dt = NaiveDate::from_ymd_opt(2026, 11, 13)
+            .unwrap()
+            .and_hms_opt(19, 30, 0)
+            .unwrap();
+        let m = CurrentClassMatch {
+            kind: MatchKind::Active,
+            slot: "3".to_string(),
+            time: "10:10~11:00".to_string(),
+            weekday_index: 4,
+            course: CourseSlot {
+                name: "大學之道".to_string(),
+                teacher: "何昕家".to_string(),
+                room: "3309".to_string(),
+                color: "#00DAC3".to_string(),
+            },
+        };
+        let p = build_recording_path_with_template(
+            Path::new("/recordings"),
+            Some(&m),
+            dt,
+            Some("{class} {date} - {lession number}"),
+            3,
+        );
+        assert_eq!(
+            p,
+            PathBuf::from("/recordings/大學之道/大學之道 2026-11-13 - 3.m4a")
+        );
+
+        let p_fmt = build_recording_path_with_options(
+            Path::new("/recordings"),
+            Some(&m),
+            dt,
+            Some("{class} {date} - {lesson number}"),
+            Some("MMM dd"),
+            2,
+        );
+        assert_eq!(
+            p_fmt,
+            PathBuf::from("/recordings/大學之道/大學之道 Nov 13 - 2.m4a")
         );
     }
 

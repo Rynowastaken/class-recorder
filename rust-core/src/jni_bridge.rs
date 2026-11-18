@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 
 use crate::mcp::{McpServerHandle, McpState, RecordingController};
 use crate::schedule::{fetch_schedule, match_current_class, CourseSlot, CurrentClassMatch, MatchKind};
-use crate::storage::{build_recording_path, RecordingRecord, Storage};
+use crate::storage::{build_recording_path_with_options, RecordingRecord, Storage};
 
 struct CoreContext {
     runtime: tokio::runtime::Runtime,
@@ -262,7 +262,33 @@ pub extern "system" fn Java_com_ryno_classrecorder_core_RustCore_prepareRecordin
             .and_then(|s| match_current_class(&s, now_local, 15))
     };
 
-    let path = build_recording_path(&ctx.recordings_dir, matched.as_ref(), now_local);
+    let course_name_for_count = matched
+        .as_ref()
+        .map(|m| m.course.name.clone())
+        .unwrap_or_else(|| "Uncategorized".to_string());
+    let lesson_number = ctx
+        .storage
+        .count_course_recordings(&course_name_for_count)
+        .unwrap_or(0)
+        + 1;
+    let template = ctx
+        .storage
+        .get_setting("filename_template")
+        .ok()
+        .flatten();
+    let date_format = ctx
+        .storage
+        .get_setting("date_format")
+        .ok()
+        .flatten();
+    let path = build_recording_path_with_options(
+        &ctx.recordings_dir,
+        matched.as_ref(),
+        now_local,
+        template.as_deref(),
+        date_format.as_deref(),
+        lesson_number,
+    );
     if let Some(parent) = path.parent() {
         if let Err(e) = std::fs::create_dir_all(parent) {
             return return_json(&mut env, err_json(format!("Failed to create course folder: {e}")));
@@ -464,5 +490,65 @@ pub extern "system" fn Java_com_ryno_classrecorder_core_RustCore_getMcpStatus(
                 "recentCalls": []
             })),
         ),
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_ryno_classrecorder_core_RustCore_setFilenameTemplate(
+    mut env: JNIEnv,
+    _class: JClass,
+    template: JString,
+) -> jstring {
+    let Some(ctx) = CORE.get() else {
+        return return_json(&mut env, err_json("Core not initialized"));
+    };
+    let tmpl = jstr(&mut env, template);
+    match ctx.storage.set_setting("filename_template", tmpl.trim()) {
+        Ok(()) => return_json(&mut env, ok_json(json!({ "template": tmpl.trim() }))),
+        Err(e) => return_json(&mut env, err_json(e)),
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_ryno_classrecorder_core_RustCore_getFilenameTemplate(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let Some(ctx) = CORE.get() else {
+        return return_json(&mut env, err_json("Core not initialized"));
+    };
+    match ctx.storage.get_setting("filename_template") {
+        Ok(t) => return_json(&mut env, ok_json(json!({ "template": t.unwrap_or_default() }))),
+        Err(e) => return_json(&mut env, err_json(e)),
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_ryno_classrecorder_core_RustCore_setDateFormat(
+    mut env: JNIEnv,
+    _class: JClass,
+    date_format: JString,
+) -> jstring {
+    let Some(ctx) = CORE.get() else {
+        return return_json(&mut env, err_json("Core not initialized"));
+    };
+    let fmt = jstr(&mut env, date_format);
+    match ctx.storage.set_setting("date_format", fmt.trim()) {
+        Ok(()) => return_json(&mut env, ok_json(json!({ "dateFormat": fmt.trim() }))),
+        Err(e) => return_json(&mut env, err_json(e)),
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_ryno_classrecorder_core_RustCore_getDateFormat(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let Some(ctx) = CORE.get() else {
+        return return_json(&mut env, err_json("Core not initialized"));
+    };
+    match ctx.storage.get_setting("date_format") {
+        Ok(f) => return_json(&mut env, ok_json(json!({ "dateFormat": f.unwrap_or_default() }))),
+        Err(e) => return_json(&mut env, err_json(e)),
     }
 }

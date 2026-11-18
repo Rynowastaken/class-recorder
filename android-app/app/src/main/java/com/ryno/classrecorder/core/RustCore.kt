@@ -22,4 +22,8 @@ object RustCore {
     external fun startMcpServer(port: Int, authToken: String): String
     external fun stopMcpServer(): String
     external fun getMcpStatus(): String
+    external fun setFilenameTemplate(template: String): String
+    external fun getFilenameTemplate(): String
+    external fun setDateFormat(dateFormat: String): String
+    external fun getDateFormat(): String
 }
