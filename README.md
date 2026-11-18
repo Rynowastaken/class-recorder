@@ -20,7 +20,7 @@ Records your lectures and files them by course — automatically. It reads your 
 
 **2. Sync timetable** — Schedule tab → **Sync** → paste your `uni-campus` share link.
 
-**3. Record** — hit the red button. The card up top shows your class: 🟢 in session · 🔵 next up · ⚪ nothing scheduled.
+**3. Record** — hit the red button. The card up top shows your class: 🟢 **In class** · 🔵 **Up next** · ⚪ **Ready**.
 
 **4. Review** — Recordings tab → tap a lecture for waveform, speed (`0.5×`–`2×`), and notes.
 
@@ -30,7 +30,7 @@ Records your lectures and files them by course — automatically. It reads your 
 
 **Settings → Background** — use any photo as a backdrop, with a blur slider.
 
-**Settings → File naming** — placeholders like `{class}`, `{date}`, `{room}`, `{lesson number}`.
+**Settings → File naming** — build names from `{class}` `{date}` `{time}` `{room}` `{teacher}` `{lesson number}`, with a live preview.
 
 **Appearance** — Light / Dark / System, six themes, or follow your wallpaper.
 
@@ -40,7 +40,7 @@ Records your lectures and files them by course — automatically. It reads your 
 
 **AI assistant** — Settings → MCP server → On. Connect at `http://<phone-ip>:8765/mcp`.
 
-**Live island** — Android 16 / HyperOS only. Recording, the notification, and its pause/stop controls work without any setup; [Shizuku](https://shizuku.rikka.app/) just lets Android 16 promote it to a Live Update pill.
+**Live island** — Android 16 / HyperOS only. Nothing to set up: the recording notification and its pause/stop controls always work.
 
 ---
 
