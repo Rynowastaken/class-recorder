@@ -5,7 +5,7 @@ primary_target: "android-app/app/src/main/java/com/ryno/classrecorder/MainActivi
 related_targets: ["android-app/app/src/main/java/com/ryno/classrecorder/ui/screens/RecordScreen.kt","android-app/app/src/main/java/com/ryno/classrecorder/ui/screens/ScheduleScreen.kt","android-app/app/src/main/java/com/ryno/classrecorder/ui/screens/LibraryScreen.kt","android-app/app/src/main/java/com/ryno/classrecorder/ui/screens/PlaybackScreen.kt","android-app/app/src/main/java/com/ryno/classrecorder/ui/screens/SettingsScreen.kt"]
 ---
 
-# Surface Brief: Class Recorder App Shell & Screens
+# Surface Brief: LectureShelf App Shell & Screens
 
 - **Scope**: Full Android app UI (`MainActivity.kt`, `RecordScreen.kt`, `ScheduleScreen.kt`, `LibraryScreen.kt`, `PlaybackScreen.kt`, `SettingsScreen.kt`)
 - **Mode**: Operate
@@ -14,7 +14,7 @@ related_targets: ["android-app/app/src/main/java/com/ryno/classrecorder/ui/scree
 
 ## Direction contract
 
-THESIS: Class Recorder operates as a calm, pocket-sized DSH Go "Mist Glass" workbench rather than a loud voice-memo utility or opaque Material slab stack, refusing heavy app-bar bands and raw neon timetable fills.
+THESIS: LectureShelf operates as a calm, pocket-sized DSH Go "Mist Glass" workbench rather than a loud voice-memo utility or opaque Material slab stack, refusing heavy app-bar bands and raw neon timetable fills.
 
 OWN-WORLD: Low-saturation OKLCH Mist Glass across Light ("Morning Mist") and Dark ("Slate Night") modes with 6 presets + wallpaper accent (70% gradient/glass ground, 25% ink/paper type and 0.5dp hairlines, <=5% accent), 4 glass tiers (`chrome` floating frosted capsules with top-45% rim and outer-only shadow, `sheet` 28dp modals, `card` 14/20dp translucent groups, `pill` expandable capsules), 8 FNV-1a muted identity pairs, and recessed `codeWell` mono blocks.
 

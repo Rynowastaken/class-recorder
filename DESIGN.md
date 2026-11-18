@@ -1,5 +1,5 @@
 ---
-name: Class Recorder
+name: LectureShelf
 description: Calm pocket-sized Mist Glass lecture recorder and on-device MCP workbench for Android.
 colors:
   mist-primary-light: "#4B67B4"
@@ -133,13 +133,13 @@ components:
     padding: "8px 12px"
 ---
 
-# Design System: Class Recorder
+# Design System: LectureShelf
 
 ## Overview
 
 **Creative North Star: "The Pocket Mist Workbench"**
 
-Class Recorder adopts DSH Go's Mist Glass design language to turn classroom lecture capture and on-device AI agent connectivity into a quiet, tactile pocket workbench. Instead of stacking opaque Material app bars, heavy bottom navigation slabs, or saturated neon timetable blocks, the interface floats translucent capsules and softly rimmed cards over a stationary full-bleed atmospheric gradient. Students opening the app seconds before a lecture begins see their auto-matched class, room, MCP server endpoint, and record trigger immediately, with every secondary control receding into mist-tinted neutral glass.
+LectureShelf adopts DSH Go's Mist Glass design language to turn classroom lecture capture and on-device AI agent connectivity into a quiet, tactile pocket workbench. Instead of stacking opaque Material app bars, heavy bottom navigation slabs, or saturated neon timetable blocks, the interface floats translucent capsules and softly rimmed cards over a stationary full-bleed atmospheric gradient. Students opening the app seconds before a lecture begins see their auto-matched class, room, MCP server endpoint, and record trigger immediately, with every secondary control receding into mist-tinted neutral glass.
 
 Both Light ("Morning Mist") and Dark ("Slate Night") themes derive their surfaces and neutral inks in perceptual OKLCH space from six low-saturation presets (`Mist`, `Daiqing`, `Dusk`, `Turquoise`, `Amber`, `Graphite`) plus Android 12+ `Follow wallpaper`. Roughly 70% of every viewport belongs to the gradient backdrop and translucent glass tiers, 25% to crisp ink or paper typography and `0.5dp` hairlines, and 5% or less to active focal accents.
 

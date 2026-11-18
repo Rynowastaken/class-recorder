@@ -12,11 +12,11 @@ University students (initially National Taichung University of Science and Techn
 
 ## Product Purpose
 
-Class Recorder captures classroom lectures reliably in the background, automatically tags and files `.m4a` recordings into per-course folders using the student's synced class timetable, and exposes schedules, recordings, notes, tags, and live recording controls to AI agents over an embedded on-device Model Context Protocol (MCP) server. Success means starting or reviewing a class recording takes one tap with zero manual file naming, and any local or LAN AI agent can immediately query schedules, read/write lecture notes, or trigger recordings.
+LectureShelf captures classroom lectures reliably in the background, automatically tags and files `.m4a` recordings into per-course folders using the student's synced class timetable, and exposes schedules, recordings, notes, tags, and live recording controls to AI agents over an embedded on-device Model Context Protocol (MCP) server. Success means starting or reviewing a class recording takes one tap with zero manual file naming, and any local or LAN AI agent can immediately query schedules, read/write lecture notes, or trigger recordings.
 
 ## Positioning
 
-Unlike generic voice-memo apps that dump untitled timestamps into a flat list, Class Recorder combines automatic campus-timetable class matching (`uni-campus-app` share codes and `Personal-NUTC-Eportal` JSON) with a built-in Rust `axum`/`tokio` Streamable HTTP + SSE MCP server (`:8765`) running directly on the Android device.
+Unlike generic voice-memo apps that dump untitled timestamps into a flat list, LectureShelf combines automatic campus-timetable class matching (`uni-campus-app` share codes and `Personal-NUTC-Eportal` JSON) with a built-in Rust `axum`/`tokio` Streamable HTTP + SSE MCP server (`:8765`) running directly on the Android device.
 
 ## Operating Context
 

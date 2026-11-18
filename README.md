@@ -1,4 +1,4 @@
-# Class Recorder
+# LectureShelf
 
 Records your lectures and files them by course — automatically. It reads your timetable, knows which class you're in, and sorts every lecture into the right folder.
 
