@@ -136,14 +136,12 @@ fun AppPage(
                 }
             }
             .semantics { isTraversalGroup = true }
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        event.changes.forEach { it.consume() }
-                    }
-                }
-            }
+        // NOTE: there used to be a `pointerInput { awaitPointerEventScope { ... consume() } }`
+        // here. It consumed EVERY pointer event on the page root, which stopped the
+        // LazyColumn inside from ever seeing a drag - scrolling was dead on every
+        // screen that used AppPage, Settings most visibly because its body is the
+        // longest. It was never wired to anything: the back-swipe visual below is
+        // driven by PredictiveBackHandler, not by this gesture detector.
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val (startInset, endInset) = rememberSafeSideInsets(maxWidth)

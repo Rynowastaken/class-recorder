@@ -36,6 +36,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -65,7 +68,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ryno.classrecorder.core.AppDefaults
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import com.ryno.classrecorder.ui.AppearancePreferences
+import com.ryno.classrecorder.ui.CustomBackground
+import com.ryno.classrecorder.ui.CustomBackgroundRevision
 import com.ryno.classrecorder.ui.DshThemeMode
 import com.ryno.classrecorder.ui.MainUiState
 import com.ryno.classrecorder.ui.components.AppPage
@@ -147,6 +155,28 @@ fun SettingsScreen(
     val sampleCourse = ui.schedule?.slots
         ?.flatMap { it.days }
         ?.firstOrNull { it != null && it.name.isNotBlank() }
+
+    // -- Custom background ------------------------------------------------
+    var customBackgroundPath by remember {
+        mutableStateOf(AppearancePreferences.loadBackgroundPath(context))
+    }
+    // Live slider value, committed to prefs on release (see onValueChangeFinished).
+    var blurStrength by remember {
+        mutableFloatStateOf(AppearancePreferences.loadBackgroundBlur(context))
+    }
+    val pickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        // Copy immediately: the picker's read grant is transient, and decoding
+        // a 48 MP photo on the UI thread later would stall the frame.
+        val saved = CustomBackground.save(context, uri)
+        if (saved != null) {
+            AppearancePreferences.saveBackgroundPath(context, saved)
+            CustomBackgroundRevision.bump()
+            customBackgroundPath = saved
+        }
+    }
 
     val livePreviewName = remember(templateInput, dateFormatInput, sampleCourse) {
         UiFormatters.previewFilename(
@@ -278,6 +308,23 @@ fun SettingsScreen(
                         )
                     }
                 }
+
+                // 2b. Background Section
+                BackgroundPickerCard(
+                    hasCustomBackground = customBackgroundPath != null,
+                    blurStrength = blurStrength,
+                    onBlurChange = { blurStrength = it },
+                    onBlurChangeFinished = {
+                        AppearancePreferences.saveBackgroundBlur(context, blurStrength)
+                        CustomBackgroundRevision.bump()
+                    },
+                    onPick = { pickerLauncher.launch(arrayOf("image/*")) },
+                    onClear = {
+                        CustomBackground.clear(context)
+                        CustomBackgroundRevision.bump()
+                        customBackgroundPath = null
+                    }
+                )
 
                 // 3. Class Schedule Section
                 ListPageCard(
@@ -754,3 +801,121 @@ private fun AccentSwatchItem(
         )
     }
 }
+
+/**
+ * Background picker: choose a photo, or return to the built-in Mist gradient.
+ *
+ * The picked image is copied into app storage (CustomBackground.save) rather
+ * than referenced by URI, so it survives the picker's permission expiring and
+ * can be downscaled once instead of decoded at full size on every frame.
+ */
+@Composable
+private fun BackgroundPickerCard(
+    hasCustomBackground: Boolean,
+    blurStrength: Float,
+    onBlurChange: (Float) -> Unit,
+    onBlurChangeFinished: () -> Unit,
+    onPick: () -> Unit,
+    onClear: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    ListPageCard(
+        title = "Background",
+        footer = if (hasCustomBackground) {
+            "A dark scrim keeps text legible over your photo. The accent still tints it."
+        } else {
+            "Choose a photo to replace the Mist gradient behind the interface."
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SettingsIcon(icon = DshIcons.AutoAwesome, tintSlot = 2)
+                Spacer(Modifier.size(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (hasCustomBackground) "Custom photo" else "Mist gradient",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = scheme.onSurface
+                    )
+                    Text(
+                        text = if (hasCustomBackground) {
+                            "Tap Replace to choose another"
+                        } else {
+                            "The default backdrop"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurfaceVariant
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                DshPrimaryButton(
+                    label = if (hasCustomBackground) "Replace" else "Choose photo",
+                    onClick = onPick,
+                    modifier = Modifier.weight(1f)
+                )
+                if (hasCustomBackground) {
+                    DshSecondaryButton(
+                        label = "Reset",
+                        onClick = onClear,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            if (hasCustomBackground) {
+                // Blur only applies to a photo; the Mist gradient has no image
+                // to soften, so the control is hidden rather than disabled.
+                Spacer(Modifier.size(2.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Blur",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = scheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = when {
+                            blurStrength <= 0.01f -> "Off"
+                            blurStrength < 0.35f -> "Light"
+                            blurStrength < 0.7f -> "Medium"
+                            else -> "Heavy"
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                        color = scheme.primary
+                    )
+                }
+                Slider(
+                    value = blurStrength,
+                    onValueChange = onBlurChange,
+                    // Re-deriving the bitmap is a decode plus a box blur, far too
+                    // heavy for every pixel of travel - commit on release.
+                    onValueChangeFinished = onBlurChangeFinished,
+                    valueRange = 0f..1f,
+                    steps = 0,
+                    colors = SliderDefaults.colors(
+                        thumbColor = scheme.primary,
+                        activeTrackColor = scheme.primary,
+                        inactiveTrackColor = scheme.surfaceContainerHighest
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
