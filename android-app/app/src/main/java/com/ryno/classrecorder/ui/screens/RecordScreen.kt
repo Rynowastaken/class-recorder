@@ -256,7 +256,8 @@ fun RecordScreen(
             teacher = activeTeacher.ifBlank { "Instructor" },
             slot = activeSlot.ifBlank { "1" }
         )
-        "$activeCourseName/$filePreview"
+        val safeFolder = UiFormatters.sanitizePathSegment(activeCourseName)
+        "$safeFolder/$filePreview"
     }
 
     val dockReservedHeight = navBottom + 96.dp

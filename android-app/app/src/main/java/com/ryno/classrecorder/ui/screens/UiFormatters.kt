@@ -153,6 +153,13 @@ object UiFormatters {
      * Deterministically previews `.m4a` filenames against `2026-11-18`, supporting all
      * RustCore template placeholders (including `{lesson number}` and `{lession number}`).
      */
+    fun sanitizePathSegment(raw: String, fallback: String = "Uncategorized"): String =
+        raw.trim()
+            .replace('/', '_')
+            .replace('\\', '_')
+            .trim('.')
+            .ifBlank { fallback }
+
     fun previewFilename(
         template: String,
         dateFormat: String,
@@ -161,19 +168,24 @@ object UiFormatters {
         teacher: String = "何昕家",
         slot: String = "3"
     ): String {
+        val safeCourse = sanitizePathSegment(courseName, "Uncategorized")
+        val safeRoom = sanitizePathSegment(room, "Room")
+        val safeTeacher = sanitizePathSegment(teacher, "Instructor")
         val effectiveTemplate = template.trim().ifEmpty { "{date}_{time}_{class}_{room}" }
         val formattedDate = formatPreviewDate(SAMPLE_PREVIEW_DATE, dateFormat.trim().ifEmpty { "yyyy-MM-dd" })
         val stem = effectiveTemplate
-            .replace("{class}", courseName)
-            .replace("{course}", courseName)
+            .replace("{class}", safeCourse)
+            .replace("{course}", safeCourse)
             .replace("{date}", formattedDate)
             .replace("{lesson number}", "1")
             .replace("{lession number}", "1")
             .replace("{lesson}", "1")
-            .replace("{room}", room)
-            .replace("{teacher}", teacher)
+            .replace("{room}", safeRoom)
+            .replace("{teacher}", safeTeacher)
             .replace("{time}", "1015")
             .replace("{slot}", slot)
+            .replace('/', '_')
+            .replace('\\', '_')
             .trim()
         return if (stem.endsWith(".m4a", ignoreCase = true)) stem else "$stem.m4a"
     }

@@ -22,6 +22,12 @@ class UiFormattersTest {
             room = "3806"
         )
         assertEquals("民法 2026-11-18 - 1 (3806).m4a", out)
+        val slashCourse = UiFormatters.previewFilename(
+            template = "{class}_{date}",
+            dateFormat = "MM-dd",
+            courseName = "週會/班會"
+        )
+        assertEquals("週會_班會_11-18.m4a", slashCourse)
     }
 
     @Test
