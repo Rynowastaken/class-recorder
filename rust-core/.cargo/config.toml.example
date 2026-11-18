@@ -1,0 +1,6 @@
+# Optional local NDK linker override if not using ./scripts/build-rust-android.sh.
+# Copy to rust-core/.cargo/config.toml and adjust paths to your Android NDK installation.
+
+[target.aarch64-linux-android]
+linker = "/path/to/Android/Sdk/ndk/<version>/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang"
+ar = "/path/to/Android/Sdk/ndk/<version>/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"

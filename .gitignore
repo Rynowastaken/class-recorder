@@ -1,0 +1,35 @@
+# Android & Gradle
+android-app/.gradle/
+android-app/.kotlin/
+android-app/build/
+android-app/app/build/
+android-app/local.properties
+android-app/*.iml
+android-app/.idea/
+android-app/captures/
+android-app/.externalNativeBuild/
+android-app/.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.keystore
+*.jks
+
+# Compiled Rust outputs & machine-local Cargo NDK paths
+rust-core/target/
+rust-core/.cargo/config.toml
+android-app/app/src/main/jniLibs/
+
+# Local UI test captures, mocks & agent tooling
+.agents/
+.superpowers/
+.impeccable/mocks/
+.impeccable/review/
+android-app/ui-shots/
+
+# OS & editor files
+.DS_Store
+Thumbs.db
+*.swp
+*~
