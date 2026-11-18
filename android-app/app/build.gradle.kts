@@ -6,9 +6,10 @@ plugins {
 
 android {
     namespace = "com.ryno.classrecorder"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
+        // The real package. Release/user installs keep this identity and its data.
         applicationId = "com.ryno.classrecorder"
         minSdk = 29
         targetSdk = 35
@@ -17,6 +18,35 @@ android {
 
         ndk {
             abiFilters += listOf("arm64-v8a")
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Side-by-side test install.
+    //
+    // "classrecorderTest" gets its own applicationId, so it installs
+    // alongside the real app with a completely separate data directory. It
+    // never sees, migrates, or overwrites the recordings the user already
+    // has under com.ryno.classrecorder - which means a UI session can be
+    // tested, screenshotted, and even wrecked without touching real data.
+    //
+    //   ./gradle :app:assembleClassrecorderTestDebug
+    //   adb install -r app-classrecorderTest-debug.apk
+    //
+    // Source package (namespace) stays com.ryno.classrecorder, so no Kotlin
+    // file or manifest entry needs to change.
+    // ---------------------------------------------------------------------
+    flavorDimensions += "channel"
+    productFlavors {
+        create("classrecorder") {
+            dimension = "channel"
+            isDefault = true
+        }
+        create("classrecorderTest") {
+            dimension = "channel"
+            applicationIdSuffix = ".uitest"
+            versionNameSuffix = "-uitest"
+            resValue("string", "app_name", "ClassRecorder UI Test")
         }
     }
 
@@ -45,11 +75,32 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.activity:activity-compose:1.9.3")
-    implementation(platform("androidx.compose:compose-bom:2024.11.00"))
+    // Material 3 1.4.0 is the first stable release with the expressive system:
+    // MaterialExpressiveTheme, MotionScheme, MaterialShapes, split buttons,
+    // button groups, floating toolbar and the expressive loading indicator.
+    // It is NOT in a BOM yet, so the version is pinned directly and the BOM
+    // constraint for material3 is overridden deliberately.
+    // Material 3 1.4.0 is the first stable release carrying the expressive
+    // system (MaterialExpressiveTheme, MotionScheme, expressive button groups,
+    // split buttons, floating toolbar, loading indicator). It is NOT in a BOM
+    // yet, so it is pinned directly.
+    //
+    // Compose is aligned on the 2025.09.01 BOM because M3 1.4.0 expects
+    // foundation/ui 1.8.x+. Mixing a newer runtime (which transitively resolves
+    // to 1.9.0) with older ui produced "Cannot access ... it is internal in
+    // file" errors from mismatched Kotlin metadata.
+    implementation(platform("androidx.compose:compose-bom:2025.09.01"))
+    implementation("androidx.compose.material3:material3:1.4.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material3:material3-adaptive-navigation-suite")
+
+    // Shizuku client. Lets us make one privileged binder call as shell uid
+    // (INotificationManager.setCanBePromoted) that no app can make for itself.
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
     implementation("androidx.compose.material:material-icons-extended")
+    testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
