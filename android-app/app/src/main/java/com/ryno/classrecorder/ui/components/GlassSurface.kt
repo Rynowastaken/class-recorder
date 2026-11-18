@@ -1,6 +1,7 @@
 package com.ryno.classrecorder.ui.components
 
 import android.graphics.BlurMaskFilter
+import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -18,26 +19,38 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.ryno.classrecorder.ui.theme.AppShape
 import com.ryno.classrecorder.ui.theme.ClassRecorderTheme
@@ -48,9 +61,21 @@ import com.ryno.classrecorder.ui.theme.GlassTier
 import kotlin.math.max
 
 /**
+ * Live GPU [GraphicsLayer] recorded from the scrolling scene underneath floating
+ * Chrome surfaces so [GlassSurface] can refract and blur real underlying pixels on Android 12+.
+ */
+val LocalBackdropLayer = compositionLocalOf<GraphicsLayer?> { null }
+
+/**
+ * Signals whether the enclosing Dialog/Sheet window has active OS-level cross-window blur.
+ */
+val LocalWindowBlurActive = compositionLocalOf { false }
+
+/**
  * Four-tier DSH Go glass surface, ported from glass.dart:
  *  1. Outer-only clipped drop shadows (never muddies translucent interior)
- *  2. Translucent fill (or opaque fallbackFill when blurEnabled = false)
+ *  2. Real Android 12+ GraphicsLayer / Window backdrop blur for Chrome & Sheet tiers
+ *     (automatically degrading to opaque/frosted fallbackFill when unsupported or reducedMotion)
  *  3. Inset 0.5dp hairline stroke + top-to-45% vertical rim highlight
  *  4. Press scale (0.97f) + LocalContentColor = colorScheme.onSurface
  */
@@ -71,6 +96,9 @@ fun GlassSurface(
 ) {
     val surfaces = ClassRecorderTheme.surfaces
     val reducedMotion = ClassRecorderTheme.reducedMotion
+    val density = LocalDensity.current
+    val backdropLayer = LocalBackdropLayer.current
+    val windowBlurActive = LocalWindowBlurActive.current
     val s = styleOverride ?: surfaces.glass(tier)
 
     val resolvedShape: Shape = when {
@@ -85,7 +113,31 @@ fun GlassSurface(
         }
     }
 
-    val fill = if (surfaces.blurEnabled) s.fill else s.fallbackFill
+    val canSampleLayerBlur = s.blurs &&
+        surfaces.blurEnabled &&
+        !reducedMotion &&
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        backdropLayer != null &&
+        tier != GlassTier.Sheet
+
+    val canUseWindowBlur = s.blurs &&
+        surfaces.blurEnabled &&
+        !reducedMotion &&
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        windowBlurActive &&
+        tier == GlassTier.Sheet
+
+    val fill = when {
+        !s.blurs -> if (surfaces.blurEnabled) s.fill else s.fallbackFill
+        canSampleLayerBlur || canUseWindowBlur -> s.fill
+        else -> s.fallbackFill
+    }
+
+    var rootOffset by remember { mutableStateOf(Offset.Zero) }
+    val blurRadiusPx = remember(s.blurSigma, density) {
+        with(density) { s.blurSigma.dp.toPx() }
+    }
+
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val interactive = enabled && (onClick != null || onLongClick != null)
@@ -113,13 +165,19 @@ fun GlassSurface(
 
     Box(
         modifier = modifier
+            .then(
+                if (canSampleLayerBlur) {
+                    Modifier.onGloballyPositioned { coords ->
+                        rootOffset = coords.positionInRoot()
+                    }
+                } else Modifier
+            )
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
             .drawOuterGlassShadows(shape = resolvedShape, shadows = s.shadows)
             .clip(resolvedShape)
-            .background(fill)
             .then(clickModifier)
             .drawGlassEdges(
                 shape = resolvedShape,
@@ -127,10 +185,44 @@ fun GlassSurface(
                 hairlineWidthDp = s.hairlineWidth.value,
                 rim = s.rim
             )
-            .padding(contentPadding)
     ) {
-        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-            content()
+        if (canSampleLayerBlur && blurRadiusPx > 0.5f) {
+            val layerToDraw = backdropLayer ?: return@Box
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer {
+                        renderEffect = BlurEffect(
+                            radiusX = blurRadiusPx,
+                            radiusY = blurRadiusPx,
+                            edgeTreatment = TileMode.Clamp
+                        )
+                    }
+                    .drawBehind {
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(surfaces.backdropTop, surfaces.backdropBottom)
+                            )
+                        )
+                        translate(left = -rootOffset.x, top = -rootOffset.y) {
+                            drawLayer(layerToDraw)
+                        }
+                    }
+            )
+        }
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(fill)
+        )
+        Box(modifier = Modifier.padding(contentPadding)) {
+            CompositionLocalProvider(
+                LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+                // Nested GlassSurfaces inside Chrome/Sheet should not re-blur an already blurred surface
+                LocalBackdropLayer provides if (canSampleLayerBlur) null else backdropLayer
+            ) {
+                content()
+            }
         }
     }
 }
@@ -238,7 +330,7 @@ private fun outlineToPath(outline: Outline, offsetX: Float, offsetY: Float): Pat
             )
         )
         is Outline.Generic -> {
-            addPath(outline.path, androidx.compose.ui.geometry.Offset(offsetX, offsetY))
+            addPath(outline.path, Offset(offsetX, offsetY))
         }
     }
 }

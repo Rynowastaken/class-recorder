@@ -36,6 +36,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -45,8 +46,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -56,6 +64,7 @@ import com.ryno.classrecorder.ui.components.BackdropVeil
 import com.ryno.classrecorder.ui.components.DshBackdrop
 import com.ryno.classrecorder.ui.components.GlassIconButton
 import com.ryno.classrecorder.ui.components.GlassSurface
+import com.ryno.classrecorder.ui.components.LocalBackdropLayer
 import com.ryno.classrecorder.ui.components.PillSegment
 import com.ryno.classrecorder.ui.components.SegmentedPill
 import com.ryno.classrecorder.ui.screens.LibraryScreen
@@ -94,6 +103,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
     val ui by vm.ui.collectAsState()
@@ -102,6 +112,7 @@ fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
     val reduced = ClassRecorderTheme.reducedMotion
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val rootBackdropLayer = rememberGraphicsLayer()
 
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { ROOT_TABS.size })
     val pageScrollVeils = remember { mutableStateMapOf(0 to 0f, 1 to 0f, 2 to 0f) }
@@ -115,6 +126,7 @@ fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
         val id = activePlaybackId ?: return@remember null
         ui.recordings.find { it.id == id } ?: lastPlaybackSnapshot
     }
+    val overlayOpen = playbackRecording != null || showSettings
 
     var hasMicPermission by remember {
         mutableStateOf(
@@ -154,13 +166,31 @@ fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
         .coerceIn(0f, (ROOT_TABS.size - 1).toFloat())
 
     DshBackdrop(modifier = Modifier.fillMaxSize()) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (overlayOpen) {
+                        Modifier
+                            .semantics { hideFromAccessibility() }
+                            .clearAndSetSemantics {}
+                    } else Modifier
+                )
+        ) {
             val sideInset = ((maxWidth - AppSpace.readingWidth) / 2f).coerceAtLeast(0.dp)
 
             HorizontalPager(
                 state = pagerState,
                 beyondViewportPageCount = 2,
-                modifier = Modifier.fillMaxSize()
+                userScrollEnabled = !overlayOpen,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .drawWithContent {
+                        rootBackdropLayer.record {
+                            this@drawWithContent.drawContent()
+                        }
+                        drawLayer(rootBackdropLayer)
+                    }
             ) { tab ->
                 when (tab) {
                     0 -> RecordScreen(
@@ -219,7 +249,6 @@ fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
                 }
             }
 
-            // Feathered top veil only once page content scrolls underneath the floating chrome
             BackdropVeil(
                 fromTop = true,
                 solidHeight = topReserved,
@@ -228,64 +257,64 @@ fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
                 modifier = Modifier.align(Alignment.TopCenter)
             )
 
-            // Floating DSH Go top chrome bar: SegmentedPill + circular Settings GlassIconButton
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = statusTop)
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = chromeBarHeight)
-                    .padding(horizontal = AppSpace.floatInset + sideInset, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SegmentedPill(
-                    segments = ROOT_TABS,
-                    selected = pagerState.currentPage,
-                    onSelect = { targetPage ->
-                        scope.launch {
-                            pagerState.animateScrollToPage(
-                                page = targetPage,
-                                animationSpec = DshMotion.standardTween(reduced)
-                            )
-                        }
-                    },
-                    chromeGlass = true,
-                    fractionalIndex = fractionalPage,
-                    modifier = Modifier.weight(1f)
-                )
-
-                Spacer(Modifier.width(8.dp))
-
-                GlassIconButton(
-                    icon = Icons.Rounded.Settings,
-                    contentDescription = "Settings",
-                    onClick = { showSettings = true },
-                    tier = GlassTier.Chrome,
-                    badgeTone = if (ui.mcpStatus.running) StatusTone.Ok else null
-                )
-            }
-
-            // Chrome-tier Mist Glass snackbar host above the floating composer dock
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(
-                        start = AppSpace.gutter + sideInset,
-                        end = AppSpace.gutter + sideInset,
-                        bottom = navBottom + 88.dp
-                    )
-            ) { data ->
-                GlassSurface(
-                    tier = GlassTier.Chrome,
-                    shape = AppShape.radiusLg,
-                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp)
+            CompositionLocalProvider(LocalBackdropLayer provides rootBackdropLayer) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = statusTop)
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = chromeBarHeight)
+                        .padding(horizontal = AppSpace.floatInset + sideInset, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = data.visuals.message,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                    SegmentedPill(
+                        segments = ROOT_TABS,
+                        selected = pagerState.currentPage,
+                        onSelect = { targetPage ->
+                            scope.launch {
+                                pagerState.animateScrollToPage(
+                                    page = targetPage,
+                                    animationSpec = DshMotion.standardTween(reduced)
+                                )
+                            }
+                        },
+                        chromeGlass = true,
+                        fractionalIndex = fractionalPage,
+                        modifier = Modifier.weight(1f)
                     )
+
+                    Spacer(Modifier.width(8.dp))
+
+                    GlassIconButton(
+                        icon = Icons.Rounded.Settings,
+                        contentDescription = "Settings",
+                        onClick = { showSettings = true },
+                        tier = GlassTier.Chrome,
+                        badgeTone = if (ui.mcpStatus.running) StatusTone.Ok else null
+                    )
+                }
+
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(
+                            start = AppSpace.gutter + sideInset,
+                            end = AppSpace.gutter + sideInset,
+                            bottom = navBottom + 88.dp
+                        )
+                ) { data ->
+                    GlassSurface(
+                        tier = GlassTier.Chrome,
+                        shape = AppShape.radiusLg,
+                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp)
+                    ) {
+                        Text(
+                            text = data.visuals.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
         }

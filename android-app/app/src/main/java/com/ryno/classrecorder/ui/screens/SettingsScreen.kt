@@ -1,7 +1,7 @@
 package com.ryno.classrecorder.ui.screens
 
 import android.os.Build
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -44,10 +44,12 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CancellationException
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +65,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -136,12 +139,23 @@ fun SettingsScreen(
     onToggleMcp: () -> Unit,
     onShowMessage: (String) -> Unit
 ) {
-    BackHandler(onBack = onDismiss)
-
     val context = LocalContext.current
+    val density = LocalDensity.current
     val scheme = MaterialTheme.colorScheme
     val surfaces = ClassRecorderTheme.surfaces
     val reduced = ClassRecorderTheme.reducedMotion
+
+    var backProgress by remember { mutableFloatStateOf(0f) }
+    PredictiveBackHandler(enabled = true) { progressFlow ->
+        try {
+            progressFlow.collect { event ->
+                backProgress = event.progress.coerceIn(0f, 1f)
+            }
+            onDismiss()
+        } catch (_: CancellationException) {
+            backProgress = 0f
+        }
+    }
 
     var showMcpEndpoints by rememberSaveable { mutableStateOf(false) }
     var scheduleUrl by rememberSaveable(ui.scheduleSourceInput) { mutableStateOf(ui.scheduleSourceInput) }
@@ -170,9 +184,18 @@ fun SettingsScreen(
         )
     }
 
+    val slidePx = with(density) { 40.dp.toPx() } * backProgress
+
     AppPage(
         title = "Settings",
-        onBack = onDismiss
+        onBack = onDismiss,
+        modifier = Modifier.graphicsLayer {
+            val s = 1f - 0.05f * backProgress
+            scaleX = s
+            scaleY = s
+            translationX = slidePx
+            alpha = 1f - 0.18f * backProgress
+        }
     ) {
         item(key = "settings_body") {
             Column(

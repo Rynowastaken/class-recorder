@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -77,12 +79,15 @@ import com.ryno.classrecorder.ui.theme.tabular
  * Hub overview card ported from DSH Go's overview_card.dart:
  * 52dp leading glyph slot, 16dp inset, 14dp gap, optional hairline + 44dp/48dp footer strip.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OverviewCard(
     leading: @Composable () -> Unit,
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    subtitleAtoms: List<String> = emptyList(),
+    titleBadge: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
     footer: (@Composable RowScope.() -> Unit)? = null,
@@ -110,7 +115,12 @@ fun OverviewCard(
                             Modifier.clickable(role = Role.Button, onClick = onClick)
                         } else Modifier
                     )
-                    .padding(start = 16.dp, top = 16.dp, end = 12.dp, bottom = 16.dp),
+                    .padding(
+                        start = 16.dp,
+                        top = 16.dp,
+                        end = if (trailing != null || (onClick != null && titleBadge == null)) 12.dp else 16.dp,
+                        bottom = 16.dp
+                    ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
@@ -121,14 +131,40 @@ fun OverviewCard(
                 }
                 Spacer(Modifier.width(14.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = scheme.onSurface,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (!subtitle.isNullOrBlank()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = scheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (titleBadge != null) {
+                            titleBadge()
+                        }
+                    }
+                    if (subtitleAtoms.isNotEmpty()) {
+                        Spacer(Modifier.height(3.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(0.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            subtitleAtoms.forEachIndexed { idx, atom ->
+                                Text(
+                                    text = if (idx == 0) atom else " · $atom",
+                                    style = MaterialTheme.typography.bodyMedium.tabular(),
+                                    color = scheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        }
+                    } else if (!subtitle.isNullOrBlank()) {
                         Spacer(Modifier.height(2.dp))
                         Text(
                             text = subtitle,
@@ -142,7 +178,7 @@ fun OverviewCard(
                 if (trailing != null) {
                     Spacer(Modifier.width(8.dp))
                     trailing()
-                } else if (onClick != null) {
+                } else if (onClick != null && titleBadge == null) {
                     Spacer(Modifier.width(4.dp))
                     OverviewChevron()
                 }

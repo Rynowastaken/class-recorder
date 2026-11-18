@@ -48,7 +48,31 @@ data class DshColors(
         return identity[idx] to onIdentity[idx]
     }
 
+    /**
+     * Contrast-guarded (>= 3.5:1) solid dot/pip color for a course or category key,
+     * tuned in OKLCH for [onDarkSurface] so small 4–9dp indicators never wash out.
+     */
+    fun courseDot(key: String, onDarkSurface: Boolean): Color {
+        val idx = identityIndex(key, DOT_HUES.size)
+        val hue = DOT_HUES[idx]
+        return if (onDarkSurface) {
+            Oklch(0.79, 0.105, hue).toColor()
+        } else {
+            Oklch(0.45, 0.115, hue).toColor()
+        }
+    }
+
     companion object {
+        private val DOT_HUES = doubleArrayOf(
+            245.0, // Sky blue
+            285.0, // Lavender
+            332.0, // Lotus rose
+            24.0,  // Terracotta coral
+            66.0,  // Ochre wheat
+            140.0, // Moss green
+            172.0, // Celadon mint
+            205.0  // Lake cyan
+        )
         /**
          * Stable unsigned 32-bit FNV-1a hash mapped to `0 until slots`.
          * Normalizes blank strings to `"Uncategorized"` so untagged courses always match.

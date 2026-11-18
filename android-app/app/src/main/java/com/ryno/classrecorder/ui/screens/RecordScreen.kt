@@ -1,9 +1,14 @@
 package com.ryno.classrecorder.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -25,6 +30,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
@@ -36,12 +42,12 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Stop
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -51,7 +57,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -62,12 +76,14 @@ import com.ryno.classrecorder.ui.MainUiState
 import com.ryno.classrecorder.ui.components.AppSheet
 import com.ryno.classrecorder.ui.components.BackdropVeil
 import com.ryno.classrecorder.ui.components.CapsuleChoiceChip
+import com.ryno.classrecorder.ui.components.DshConfirmSheet
 import com.ryno.classrecorder.ui.components.DshPrimaryButton
 import com.ryno.classrecorder.ui.components.DshSecondaryButton
 import com.ryno.classrecorder.ui.components.GlassPill
 import com.ryno.classrecorder.ui.components.GlassSurface
 import com.ryno.classrecorder.ui.components.ListCardDivider
 import com.ryno.classrecorder.ui.components.ListPageRow
+import com.ryno.classrecorder.ui.components.LocalBackdropLayer
 import com.ryno.classrecorder.ui.components.OverviewCard
 import com.ryno.classrecorder.ui.components.OverviewFooterRow
 import com.ryno.classrecorder.ui.components.OverviewGlyph
@@ -84,11 +100,12 @@ import com.ryno.classrecorder.ui.theme.StatusTone
 
 /**
  * Primary lecture capture workspace rebuilt in DSH Go's Mist Glass language:
- * - Course OverviewCard with MCP footer
+ * - Course OverviewCard with inline StatusChip, atomic metadata FlowRow, and MCP footer
  * - Optional collapsible GlassPill for recent agent tool calls
- * - Quick course CapsuleChoiceChips when idle
+ * - Quick course CapsuleChoiceChips with >= 3.5:1 contrast-guarded course dots
  * - Mist Glass waveform stage + 48sp Light tabular clock
- * - Floating Chrome-tier bottom Composer dock
+ * - Floating Chrome-tier bottom Composer dock: tappable course summary on the left +
+ *   circular brick-rose record trigger on the right (transitioning to Discard / Pause / Finish when live)
  */
 @Composable
 fun RecordScreen(
@@ -110,8 +127,8 @@ fun RecordScreen(
     val density = LocalDensity.current
     val dsh = ClassRecorderTheme.dshColors
     val scheme = MaterialTheme.colorScheme
-    val reduced = ClassRecorderTheme.reducedMotion
     val listState = rememberLazyListState()
+    val contentBackdropLayer = rememberGraphicsLayer()
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     var showCoursePicker by remember { mutableStateOf(false) }
@@ -175,21 +192,21 @@ fun RecordScreen(
         else -> StatusTone.Idle to "Ready"
     }
 
-    val courseMeta = when {
+    val courseAtoms: List<String> = when {
         recorder.isRecording -> {
             val r = recorder.activeRecording
             listOfNotNull(
                 r?.slot?.takeIf { it.isNotBlank() }?.let { "P$it" },
                 r?.room?.takeIf { it.isNotBlank() },
                 r?.teacher?.takeIf { it.isNotBlank() }
-            ).joinToString(" · ").ifBlank { "Capturing background audio" }
+            )
         }
         ui.selectedCourseOverride != null -> {
             val c = ui.selectedCourseOverride
             listOfNotNull(
                 c.room.takeIf { it.isNotBlank() },
                 c.teacher.takeIf { it.isNotBlank() }
-            ).joinToString(" · ").ifBlank { "Manual class override" }
+            )
         }
         ui.currentClass != null -> {
             val cur = ui.currentClass
@@ -198,8 +215,15 @@ fun RecordScreen(
                 UiFormatters.formatTimeRange(cur.time).takeIf { it.isNotBlank() },
                 cur.course.room.takeIf { it.isNotBlank() },
                 cur.course.teacher.takeIf { it.isNotBlank() }
-            ).joinToString(" · ")
+            )
         }
+        else -> emptyList()
+    }
+
+    val fallbackSubtitle = when {
+        courseAtoms.isNotEmpty() -> null
+        recorder.isRecording -> "Capturing background audio"
+        ui.selectedCourseOverride != null -> "Manual class override"
         distinctCourses.isNotEmpty() -> "No class in session · Tap to pick a course"
         else -> "Sync your schedule or record an untagged session"
     }
@@ -211,12 +235,19 @@ fun RecordScreen(
 
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .drawWithContent {
+                    contentBackdropLayer.record {
+                        this@drawWithContent.drawContent()
+                    }
+                    drawLayer(contentBackdropLayer)
+                },
             contentPadding = PaddingValues(
                 start = AppSpace.gutter + sideInset,
                 end = AppSpace.gutter + sideInset,
                 top = topContentInset + 8.dp,
-                bottom = dockReservedHeight + 16.dp
+                bottom = dockReservedHeight + 20.dp
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -229,8 +260,9 @@ fun RecordScreen(
                         )
                     },
                     title = activeCourseName,
-                    subtitle = courseMeta,
-                    trailing = {
+                    subtitle = fallbackSubtitle,
+                    subtitleAtoms = courseAtoms,
+                    titleBadge = {
                         StatusChip(
                             tone = statusTone,
                             label = statusLabel
@@ -315,11 +347,10 @@ fun RecordScreen(
                             items = distinctCourses,
                             key = { it.name }
                         ) { course ->
-                            val (dotBg, _) = dsh.identityPair(course.name)
                             CapsuleChoiceChip(
                                 label = course.name,
                                 selected = ui.selectedCourseOverride?.name == course.name,
-                                dotColor = dotBg,
+                                courseKey = course.name,
                                 onClick = {
                                     if (ui.selectedCourseOverride?.name == course.name) {
                                         onSelectCourseOverride(null)
@@ -350,23 +381,27 @@ fun RecordScreen(
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 
-        CaptureComposerDock(
-            isRecording = recorder.isRecording,
-            isPaused = recorder.isPaused,
-            hasMicPermission = hasMicPermission,
-            onRequestMicPermission = onRequestMicPermission,
-            onStart = onStartRecording,
-            onTogglePause = onTogglePause,
-            onFinish = onStopRecording,
-            onDiscard = { showDiscardDialog = true },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(
-                    start = AppSpace.floatInset + sideInset,
-                    end = AppSpace.floatInset + sideInset,
-                    bottom = navBottom + AppSpace.floatInset
-                )
-        )
+        CompositionLocalProvider(LocalBackdropLayer provides contentBackdropLayer) {
+            CaptureComposerDock(
+                activeCourseName = activeCourseName,
+                isRecording = recorder.isRecording,
+                isPaused = recorder.isPaused,
+                hasMicPermission = hasMicPermission,
+                onOpenCoursePicker = { showCoursePicker = true },
+                onRequestMicPermission = onRequestMicPermission,
+                onStart = onStartRecording,
+                onTogglePause = onTogglePause,
+                onFinish = onStopRecording,
+                onDiscard = { showDiscardDialog = true },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(
+                        start = AppSpace.floatInset + sideInset,
+                        end = AppSpace.floatInset + sideInset,
+                        bottom = navBottom + AppSpace.floatInset
+                    )
+            )
+        }
     }
 
     if (showCoursePicker) {
@@ -392,25 +427,17 @@ fun RecordScreen(
     }
 
     if (showDiscardDialog) {
-        AlertDialog(
-            onDismissRequest = { showDiscardDialog = false },
-            title = { Text("Discard recording?") },
-            text = { Text("The current audio capture will be deleted and cannot be recovered.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDiscardDialog = false
-                        onDiscardRecording()
-                    }
-                ) {
-                    Text("Discard", color = dsh.danger)
-                }
+        DshConfirmSheet(
+            title = "Discard recording?",
+            message = "The current audio capture will be deleted and cannot be recovered.",
+            confirmLabel = "Discard",
+            cancelLabel = "Keep recording",
+            danger = true,
+            onConfirm = {
+                showDiscardDialog = false
+                onDiscardRecording()
             },
-            dismissButton = {
-                TextButton(onClick = { showDiscardDialog = false }) {
-                    Text("Keep recording")
-                }
-            }
+            onDismiss = { showDiscardDialog = false }
         )
     }
 }
@@ -473,7 +500,7 @@ private fun CaptureStageCard(
                 active = recorder.isRecording,
                 paused = recorder.isPaused,
                 activeColor = if (recorder.isPaused) scheme.primary else dsh.danger,
-                idleColor = scheme.outlineVariant,
+                idleColor = dsh.textTertiary,
                 playheadColor = dsh.danger,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -483,11 +510,18 @@ private fun CaptureStageCard(
     }
 }
 
+/**
+ * DSH Go Composer-style bottom dock:
+ * - Idle: tappable target summary on the left + circular 52dp brick-rose record trigger on the right.
+ * - Live/Paused: circular Discard button + Pause/Resume capsule + brick-rose Finish capsule.
+ */
 @Composable
 private fun CaptureComposerDock(
+    activeCourseName: String,
     isRecording: Boolean,
     isPaused: Boolean,
     hasMicPermission: Boolean,
+    onOpenCoursePicker: () -> Unit,
     onRequestMicPermission: () -> Unit,
     onStart: () -> Unit,
     onTogglePause: () -> Unit,
@@ -496,13 +530,15 @@ private fun CaptureComposerDock(
     modifier: Modifier = Modifier
 ) {
     val dsh = ClassRecorderTheme.dshColors
+    val surfaces = ClassRecorderTheme.surfaces
+    val scheme = MaterialTheme.colorScheme
     val reduced = ClassRecorderTheme.reducedMotion
 
     GlassSurface(
         modifier = modifier.fillMaxWidth(),
         tier = GlassTier.Chrome,
         shape = AppShape.radiusXl,
-        contentPadding = PaddingValues(10.dp)
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
     ) {
         AnimatedContent(
             targetState = isRecording,
@@ -512,13 +548,92 @@ private fun CaptureComposerDock(
             label = "composerDockState"
         ) { active ->
             if (!active) {
-                DshPrimaryButton(
-                    label = if (hasMicPermission) "Start recording" else "Allow microphone",
-                    icon = Icons.Rounded.Mic,
-                    onClick = if (hasMicPermission) onStart else onRequestMicPermission,
-                    minHeight = 52.dp,
-                    modifier = Modifier.fillMaxWidth()
+                val dotColor = dsh.courseDot(activeCourseName, surfaces.darkTheme)
+                val recInteraction = remember { MutableInteractionSource() }
+                val recPressed by recInteraction.collectIsPressedAsState()
+                val recScale by animateFloatAsState(
+                    targetValue = if (recPressed && !reduced) DshMotion.PRESS_SCALE else 1f,
+                    animationSpec = DshMotion.pressSpring(reduced),
+                    label = "recordTriggerScale"
                 )
+                val triggerLabel = if (hasMicPermission) "Start recording" else "Allow microphone"
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .defaultMinSize(minHeight = 48.dp)
+                            .clip(AppShape.radiusLg)
+                            .clickable(
+                                role = Role.Button,
+                                onClickLabel = "Choose course tag",
+                                onClick = onOpenCoursePicker
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(dotColor)
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Record · $activeCourseName",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = scheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = if (hasMicPermission) {
+                                    "AAC 128 kbps · Tap to change class"
+                                } else {
+                                    "Tap mic to allow audio permission"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = dsh.textTertiary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .graphicsLayer {
+                                scaleX = recScale
+                                scaleY = recScale
+                            }
+                            .clip(CircleShape)
+                            .background(dsh.danger)
+                            .clickable(
+                                interactionSource = recInteraction,
+                                indication = ripple(),
+                                role = Role.Button,
+                                onClickLabel = triggerLabel,
+                                onClick = if (hasMicPermission) onStart else onRequestMicPermission
+                            )
+                            .semantics {
+                                contentDescription = triggerLabel
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Mic,
+                            contentDescription = null,
+                            tint = dsh.onDanger,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

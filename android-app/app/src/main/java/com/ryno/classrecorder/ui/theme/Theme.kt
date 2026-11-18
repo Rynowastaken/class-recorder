@@ -54,12 +54,14 @@ fun ClassRecorderTheme(
     }
     val accent = resolveAppAccent(accentId)
     val reducedMotion = rememberReducedMotion()
+    val blurEnabled = !reducedMotion && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     val colorScheme = remember(isDark, accent) {
         if (isDark) DshPalette.darkScheme(accent) else DshPalette.lightScheme(accent)
     }
-    val surfaces = remember(isDark, accent) {
-        if (isDark) DshSurfaces.dark(accent) else DshSurfaces.light(accent)
+    val surfaces = remember(isDark, accent, blurEnabled) {
+        if (isDark) DshSurfaces.dark(accent, blurEnabled = blurEnabled)
+        else DshSurfaces.light(accent, blurEnabled = blurEnabled)
     }
     val dshColors = remember(isDark, accent) {
         DshColors.forAccent(isDark, accent)

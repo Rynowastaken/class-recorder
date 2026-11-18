@@ -1,5 +1,8 @@
 package com.ryno.classrecorder.ui.theme
 
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
@@ -10,12 +13,16 @@ import androidx.compose.animation.core.TweenSpec
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 
 /**
- * DSH Go motion tokens & system Reduce Motion observer, ported from motion.dart.
+ * DSH Go motion tokens & live system Reduce Motion observer, ported from motion.dart.
  */
 object DshMotion {
     const val PRESS_MS = 120
@@ -55,16 +62,28 @@ object DshMotion {
 
 val LocalReducedMotion = staticCompositionLocalOf { false }
 
+private fun readAnimatorReduced(resolver: android.content.ContentResolver): Boolean =
+    runCatching {
+        Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+    }.getOrDefault(false)
+
 @Composable
 fun rememberReducedMotion(): Boolean {
     val context = LocalContext.current
-    return remember(context) {
-        runCatching {
-            Settings.Global.getFloat(
-                context.contentResolver,
-                Settings.Global.ANIMATOR_DURATION_SCALE,
-                1f
-            ) == 0f
-        }.getOrDefault(false)
+    val resolver = context.contentResolver
+    var reduced by remember(resolver) { mutableStateOf(readAnimatorReduced(resolver)) }
+
+    DisposableEffect(resolver) {
+        val uri = Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE)
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                reduced = readAnimatorReduced(resolver)
+            }
+        }
+        runCatching { resolver.registerContentObserver(uri, false, observer) }
+        onDispose {
+            runCatching { resolver.unregisterContentObserver(observer) }
+        }
     }
+    return reduced
 }

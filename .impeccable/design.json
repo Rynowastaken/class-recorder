@@ -1,0 +1,260 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-18T14:28:00+08:00",
+  "title": "Design System: Class Recorder",
+  "extensions": {
+    "colorMeta": {
+      "mist-primary-light": {
+        "role": "primary",
+        "displayName": "Periwinkle Mist (Light)",
+        "canonical": "oklch(49% 0.125 264)",
+        "tonalRamp": ["#1A254B", "#283971", "#374D92", "#4760AC", "#6E85CB", "#99B3FF", "#C8D6FF", "#EAEEFA"]
+      },
+      "mist-primary-dark": {
+        "role": "primary",
+        "displayName": "Periwinkle Mist (Dark)",
+        "canonical": "oklch(78% 0.115 264)",
+        "tonalRamp": ["#192240", "#293868", "#3D5399", "#5873C8", "#7994EA", "#99B3FF", "#C3D2FF", "#ECF0FF"]
+      },
+      "daiqing-seed": {
+        "role": "primary",
+        "displayName": "Daiqing Slate Teal",
+        "canonical": "oklch(46% 0.082 232)",
+        "tonalRamp": ["#122634", "#1B3B50", "#245F80", "#38789B", "#5A98BA", "#84BDD9", "#B8DCEB", "#E6F2F8"]
+      },
+      "dusk-seed": {
+        "role": "primary",
+        "displayName": "Muted Dusk Violet",
+        "canonical": "oklch(49% 0.072 298)",
+        "tonalRamp": ["#221C2E", "#382E4B", "#504369", "#695A87", "#8878A8", "#ACA0C9", "#D2CAE6", "#EFEBF7"]
+      },
+      "turquoise-seed": {
+        "role": "primary",
+        "displayName": "Celadon Turquoise",
+        "canonical": "oklch(49% 0.072 176)",
+        "tonalRamp": ["#112B26", "#1D463E", "#2E6D61", "#458A7D", "#66AA9C", "#8ECBC0", "#BEE4DD", "#E7F5F2"]
+      },
+      "amber-seed": {
+        "role": "primary",
+        "displayName": "Warm Ochre Amber",
+        "canonical": "oklch(49% 0.078 68)",
+        "tonalRamp": ["#2B1E0E", "#473218", "#634624", "#7D5B30", "#9E7849", "#C29D6F", "#E1C9AA", "#F6EDE1"]
+      },
+      "graphite-seed": {
+        "role": "primary",
+        "displayName": "Achromatic Graphite",
+        "canonical": "oklch(31% 0.005 260)",
+        "tonalRamp": ["#16171A", "#2E3033", "#46494E", "#61656B", "#80848B", "#A3A7AE", "#CACDD3", "#ECEEF1"]
+      },
+      "brick-rose-dark": {
+        "role": "secondary",
+        "displayName": "Brick Rose Capture",
+        "canonical": "oklch(72% 0.105 22)",
+        "tonalRamp": ["#331513", "#542C29", "#7C3935", "#A54743", "#C86B65", "#E69089", "#F3BEB9", "#FCE8E6"]
+      },
+      "celadon-ok-dark": {
+        "role": "tertiary",
+        "displayName": "Celadon Active",
+        "canonical": "oklch(78% 0.088 152)",
+        "tonalRamp": ["#0C2518", "#233F2F", "#337250", "#4D8F6B", "#6CAE88", "#8BCCA6", "#BCE2CB", "#E6F5EC"]
+      },
+      "slate-night-top": {
+        "role": "neutral",
+        "displayName": "Slate Night Ground",
+        "canonical": "oklch(25% 0.022 264)",
+        "tonalRamp": ["#14171E", "#191B22", "#1D222E", "#252833", "#323644", "#656971", "#9A9EA9", "#E5E7EE"]
+      },
+      "morning-mist-top": {
+        "role": "neutral",
+        "displayName": "Morning Mist Ground",
+        "canonical": "oklch(95% 0.014 255)",
+        "tonalRamp": ["#1A1E28", "#454A56", "#646974", "#A1A5AC", "#DBDEE5", "#E9F0FA", "#F4F6FA", "#FFFFFF"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display Timer",
+        "purpose": "48sp Light tabular recording clock on the Recorder stage."
+      },
+      "headline": {
+        "displayName": "Page Headline",
+        "purpose": "Scroll-fading AppPage titles, Schedule school header, and PageHero titles."
+      },
+      "title": {
+        "displayName": "Card & Row Title",
+        "purpose": "OverviewCard course names, timetable periods, AppSheet headers, and rising bar titles."
+      },
+      "body": {
+        "displayName": "Body Copy",
+        "purpose": "Lecture notes, row subtitles, empty states, and settings guidance."
+      },
+      "label": {
+        "displayName": "UI Label",
+        "purpose": "Sentence-case section headers, SegmentedPill tabs, CapsuleChoiceChips, and StatusChips."
+      },
+      "mono": {
+        "displayName": "CodeWell Mono",
+        "purpose": "MCP HTTP endpoints, ADB forward commands, .m4a filenames, and seek timestamps."
+      }
+    },
+    "shadows": [
+      {
+        "name": "chrome-ambient",
+        "value": "0 8px 24px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25)",
+        "purpose": "Exterior-clipped drop shadow under floating Chrome SegmentedPill, GlassIconButton, and Composer docks."
+      },
+      {
+        "name": "sheet-lift",
+        "value": "0 8px 32px rgba(0, 0, 0, 0.40)",
+        "purpose": "Modal bottom sheet separation over dimmed scrim."
+      }
+    ],
+    "motion": [
+      {
+        "name": "press-spring",
+        "value": "spring(dampingRatio = 1.0, stiffness = 400)",
+        "purpose": "0.97x tactile press scale on interactive GlassSurfaces, buttons, and swatches."
+      },
+      {
+        "name": "thumb-spring",
+        "value": "spring(dampingRatio = 0.84, stiffness = 520)",
+        "purpose": "Sliding capsule thumb in SegmentedPill and 7-day WeekStripCard."
+      },
+      {
+        "name": "glide-page",
+        "value": "340ms cubic-bezier(0.32, 0.72, 0.0, 1.0)",
+        "purpose": "Push/pop transitions for full-screen PlaybackScreen and SettingsScreen overlays."
+      },
+      {
+        "name": "collapse-pill",
+        "value": "280ms cubic-bezier(0.65, 0.0, 0.35, 1.0)",
+        "purpose": "Expand/collapse reveal on GlassPill agent logs and MCP CodeWell endpoints."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "360px"
+      },
+      {
+        "name": "reading-column",
+        "value": "720px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Floating Chrome SegmentedPill",
+      "kind": "nav",
+      "refersTo": "button-secondary-glass",
+      "description": "Top floating Chrome-glass 3-tab switcher with sliding capsule thumb and circular Settings GlassIconButton.",
+      "html": "<div class=\"ds-chrome-bar\"><div class=\"ds-seg-pill\" role=\"tablist\"><button class=\"ds-seg-item ds-active\" role=\"tab\" aria-selected=\"true\">Recorder</button><button class=\"ds-seg-item\" role=\"tab\">Schedule</button><button class=\"ds-seg-item\" role=\"tab\">Recordings</button></div><button class=\"ds-icon-btn\" aria-label=\"Settings\"><span class=\"ds-dot\"></span><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.08a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.08a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z\"/></svg></button></div>",
+      "css": ".ds-chrome-bar { display: flex; align-items: center; gap: 8px; padding: 8px; background: linear-gradient(180deg, #1D222E, #191B22); border-radius: 20px; font-family: sans-serif; } .ds-seg-pill { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); padding: 3px; border-radius: 9999px; background: rgba(37, 40, 51, 0.86); border: 0.5px solid rgba(255,255,255,0.10); box-shadow: 0 8px 24px rgba(0,0,0,0.35); } .ds-seg-item { height: 42px; border: none; border-radius: 9999px; background: transparent; color: #B4B8C4; font-size: 13.5px; font-weight: 400; cursor: pointer; transition: background 0.16s, color 0.16s, transform 0.12s; } .ds-seg-item.ds-active { background: rgba(255,255,255,0.20); color: #E5E7EE; font-weight: 600; } .ds-seg-item:hover { color: #E5E7EE; } .ds-seg-item:focus-visible { outline: 2px solid #99B3FF; outline-offset: -2px; } .ds-icon-btn { position: relative; width: 44px; height: 44px; border-radius: 9999px; border: 0.5px solid rgba(255,255,255,0.10); background: rgba(37, 40, 51, 0.86); color: #E5E7EE; display: grid; place-items: center; cursor: pointer; transition: transform 0.12s; } .ds-icon-btn:hover { background: rgba(50, 54, 68, 0.92); } .ds-icon-btn:active { transform: scale(0.97); } .ds-icon-btn:focus-visible { outline: 2px solid #99B3FF; } .ds-dot { position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 9999px; background: #8BCCA6; }"
+    },
+    {
+      "name": "Capture Composer Dock",
+      "kind": "custom",
+      "refersTo": "button-record-trigger",
+      "description": "Floating Chrome-glass bottom recorder dock pairing tappable course summary with a 52dp Brick Rose mic trigger.",
+      "html": "<div class=\"ds-composer\"><button class=\"ds-target\"><span class=\"ds-course-dot\"></span><span class=\"ds-target-copy\"><strong>Record · 經濟學</strong><small>AAC 128 kbps · Tap to change class</small></span></button><button class=\"ds-rec-btn\" aria-label=\"Start recording\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z\"/></svg></button></div>",
+      "css": ".ds-composer { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 28px; background: rgba(37, 40, 51, 0.88); border: 0.5px solid rgba(255,255,255,0.10); box-shadow: 0 8px 24px rgba(0,0,0,0.35); font-family: sans-serif; } .ds-target { flex: 1; display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 4px 8px; border: none; border-radius: 20px; background: transparent; text-align: left; cursor: pointer; transition: background 0.16s; } .ds-target:hover { background: rgba(255,255,255,0.05); } .ds-target:focus-visible { outline: 2px solid #99B3FF; } .ds-course-dot { width: 9px; height: 9px; border-radius: 9999px; background: #9FD494; flex-shrink: 0; } .ds-target-copy { display: flex; flex-direction: column; gap: 2px; } .ds-target-copy strong { color: #E5E7EE; font-size: 14px; font-weight: 600; } .ds-target-copy small { color: #9A9EA9; font-size: 12px; } .ds-rec-btn { width: 52px; height: 52px; border-radius: 9999px; border: none; background: #E69089; color: #331513; display: grid; place-items: center; cursor: pointer; transition: transform 0.12s, filter 0.16s; } .ds-rec-btn:hover { filter: brightness(1.06); } .ds-rec-btn:active { transform: scale(0.97); } .ds-rec-btn:focus-visible { outline: 2px solid #E5E7EE; outline-offset: 2px; }"
+    },
+    {
+      "name": "Course OverviewCard",
+      "kind": "card",
+      "refersTo": "card-glass",
+      "description": "Hub glass card showing 52dp identity glyph, inline StatusChip, tabular class metadata, and MCP status footer.",
+      "html": "<div class=\"ds-overview-card\"><div class=\"ds-overview-head\"><div class=\"ds-glyph\"><svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M12 3 1 9l11 6 9-4.91V17h2V9L12 3z\"/></svg></div><div class=\"ds-overview-body\"><div class=\"ds-title-row\"><span class=\"ds-title\">經濟學</span><span class=\"ds-status-chip\"><span class=\"ds-status-dot\"></span>In class</span></div><div class=\"ds-meta\">P5 · 13:25–14:15 · 3701 · 林家慶</div></div></div><div class=\"ds-divider\"></div><button class=\"ds-overview-foot\"><span class=\"ds-foot-dot-col\"><span class=\"ds-status-dot\"></span></span><span class=\"ds-foot-text\">MCP · http://10.0.2.15:8765/mcp</span><span class=\"ds-chevron\">›</span></button></div>",
+      "css": ".ds-overview-card { border-radius: 20px; background: rgba(255,255,255,0.055); border: 0.5px solid rgba(255,255,255,0.08); color: #E5E7EE; font-family: sans-serif; overflow: hidden; } .ds-overview-head { display: flex; align-items: center; gap: 14px; padding: 16px; } .ds-glyph { width: 52px; height: 52px; border-radius: 9999px; background: #2D3E24; color: #CEE2C4; display: grid; place-items: center; flex-shrink: 0; } .ds-overview-body { flex: 1; min-width: 0; } .ds-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; } .ds-title { font-size: 16px; font-weight: 600; } .ds-status-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 9999px; background: rgba(139, 204, 166, 0.20); color: #C9E7D4; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; } .ds-status-dot { width: 7px; height: 7px; border-radius: 9999px; background: #8BCCA6; } .ds-meta { margin-top: 3px; color: #B4B8C4; font-size: 14px; font-variant-numeric: tabular-nums; } .ds-divider { height: 0.5px; margin: 0 16px; background: rgba(255,255,255,0.08); } .ds-overview-foot { width: 100%; min-height: 48px; display: flex; align-items: center; padding: 8px 12px 8px 0; background: transparent; border: none; color: #B4B8C4; font-size: 12px; font-variant-numeric: tabular-nums; cursor: pointer; transition: background 0.16s; } .ds-overview-foot:hover { background: rgba(255,255,255,0.04); } .ds-overview-foot:focus-visible { outline: 2px solid #99B3FF; outline-offset: -2px; } .ds-foot-dot-col { width: 68px; padding-left: 16px; display: grid; place-items: center; } .ds-foot-text { flex: 1; text-align: left; margin-left: 14px; } .ds-chevron { color: #9A9EA9; font-size: 18px; }"
+    },
+    {
+      "name": "Primary Stadium Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "48dp–56dp primary stadium button with non-bouncy 0.97x press spring.",
+      "html": "<button class=\"ds-btn-primary\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M8 5v14l11-7z\"/></svg><span>Play</span></button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 10px 24px; border-radius: 9999px; border: none; background: #99B3FF; color: #191B22; font-family: sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: transform 0.12s, filter 0.16s; } .ds-btn-primary:hover { filter: brightness(1.05); } .ds-btn-primary:active { transform: scale(0.97); } .ds-btn-primary:focus-visible { outline: 2px solid #E5E7EE; outline-offset: 2px; }"
+    },
+    {
+      "name": "Capsule Choice Chip",
+      "kind": "chip",
+      "refersTo": "chip-filter",
+      "description": "Quiet filter capsule using ink-fill selection and polarity-guarded course dots.",
+      "html": "<div class=\"ds-chip-row\"><button class=\"ds-chip ds-selected\" aria-pressed=\"true\">All (7)</button><button class=\"ds-chip\" aria-pressed=\"false\"><span class=\"ds-chip-dot\"></span>民法 (2)</button></div>",
+      "css": ".ds-chip-row { display: flex; gap: 8px; font-family: sans-serif; } .ds-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 13px; border-radius: 9999px; border: none; background: rgba(255,255,255,0.07); color: #B4B8C4; font-size: 13px; font-weight: 400; cursor: pointer; transition: background 0.16s, color 0.16s; } .ds-chip.ds-selected { background: #E5E7EE; color: #191B22; font-weight: 600; } .ds-chip:hover:not(.ds-selected) { background: rgba(255,255,255,0.12); color: #E5E7EE; } .ds-chip:focus-visible { outline: 2px solid #99B3FF; outline-offset: 2px; } .ds-chip-dot { width: 8px; height: 8px; border-radius: 9999px; background: #F19D94; }"
+    },
+    {
+      "name": "SearchCapsule & CodeWell",
+      "kind": "input",
+      "refersTo": "input-search-capsule",
+      "description": "Borderless stadium search field and recessed monospace CodeWell with one-tap copy.",
+      "html": "<div class=\"ds-inputs\"><label class=\"ds-search\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"m20 20-3.5-3.5\"/></svg><input type=\"search\" placeholder=\"Search courses, notes, tags\"/></label><div class=\"ds-codewell\"><div class=\"ds-codewell-head\">LAN endpoint</div><button class=\"ds-codewell-body\"><code>http://10.0.2.15:8765/mcp</code><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"9\" y=\"9\" width=\"13\" height=\"13\" rx=\"2\"/><path d=\"M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\"/></svg></button></div></div>",
+      "css": ".ds-inputs { display: flex; flex-direction: column; gap: 10px; font-family: sans-serif; } .ds-search { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 14px; border-radius: 9999px; background: rgba(255,255,255,0.07); color: #9A9EA9; } .ds-search:focus-within { outline: 1.5px solid #99B3FF; } .ds-search input { flex: 1; background: transparent; border: none; color: #E5E7EE; font-size: 14px; outline: none; } .ds-codewell { border-radius: 10px; background: #14171E; border: 0.75px solid #2F333A; overflow: hidden; } .ds-codewell-head { padding: 6px 12px; background: #1A1E26; border-bottom: 0.5px solid #2F333A; color: #9A9EA9; font-size: 11px; } .ds-codewell-body { width: 100%; min-height: 48px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; background: transparent; border: none; color: #E6E9F0; cursor: pointer; transition: background 0.16s; } .ds-codewell-body:hover { background: rgba(255,255,255,0.04); } .ds-codewell-body:focus-visible { outline: 2px solid #99B3FF; outline-offset: -2px; } .ds-codewell-body code { font-family: monospace; font-size: 12px; font-variant-numeric: tabular-nums; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Pocket Mist Workbench",
+    "overview": "Class Recorder adopts DSH Go's Mist Glass design language to turn classroom lecture capture and on-device AI agent connectivity into a quiet, tactile pocket workbench. Instead of stacking opaque Material app bars, heavy bottom navigation slabs, or saturated neon timetable blocks, the interface floats translucent capsules and softly rimmed cards over a stationary full-bleed atmospheric gradient. Students opening the app seconds before a lecture begins see their auto-detected class, room, MCP server endpoint, and record trigger immediately, with every secondary control receding into mist-tinted neutral glass.\n\nBoth Light (\"Morning Mist\") and Dark (\"Slate Night\") themes derive their surfaces and neutral inks in perceptual OKLCH space from six low-saturation presets (Mist, Daiqing, Dusk, Turquoise, Amber, Graphite) plus Android 12+ Follow wallpaper. Roughly 70% of every viewport belongs to the gradient backdrop and translucent glass tiers, 25% to crisp ink or paper typography and 0.5dp hairlines, and 5% or less to active focal accents.",
+    "keyCharacteristics": [
+      "Stationary full-bleed vertical gradient backdrop (DshBackdrop) with two soft corner radial glows shared across root pager tabs.",
+      "Floating Chrome-tier top SegmentedPill (Recorder · Schedule · Recordings) and bottom Composer dock with zero full-width bar slabs.",
+      "Four-tier Mist Glass hierarchy (Chrome, Sheet, Card, Pill) combining outer-only clipped shadows, 0.5dp inner hairlines, and top-45% vertical specular rims.",
+      "Contrast-guarded OKLCH palette derivation across six presets, live wallpaper color, and deterministic FNV-1a course identity hues.",
+      "Two-weight structural CJK/Latin typography (400 / 600) paired with 300 Light 48sp tabular clocks and recessed monospace CodeWell blocks."
+    ],
+    "rules": [
+      {
+        "name": "The Five-Percent Voice Rule",
+        "body": "Primary accent and Brick Rose never flood cards or toolbars; at rest, only the single primary action on screen (the 52dp circular record trigger on Recorder, the Now class mic button on Schedule, or the Play capsule on Playback) carries a solid color fill.",
+        "section": "colors"
+      },
+      {
+        "name": "The OKLCH Contrast Guard Rule",
+        "body": "Every preset and wallpaper-derived seed is binary-searched along OKLCH lightness (L) with chroma clamped (C <= 0.14, neutral C <= 0.015 when near-achromatic) so primary vs onPrimary achieves >= 4.5:1 and primary vs surfaceContainerHighest achieves >= 3.0:1 in both Light and Dark modes.",
+        "section": "colors"
+      },
+      {
+        "name": "The Polarity-Aware Course Dot Rule",
+        "body": "Deterministic 8-slot FNV-1a course indicators (DshColors.courseDot) render at L = 0.79 on dark surfaces and L = 0.45 on light surfaces, inverting automatically on ink-selected filter chips so 4dp–9dp dots and timetable pips always maintain >= 3.5:1 non-text contrast.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two-Weight Discipline Rule",
+        "body": "Structural UI text uses only 400 Normal and 600 SemiBold (plus 300 Light solely on large display numerals) because CJK system fonts synthesize muddy intermediate weights.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Clock Rule",
+        "body": "Every clock, duration, period range (13:25–14:15), weekday date numeral, count badge, and seek label enables OpenType tabular figures (tnum) and normalizes range separators to an en-dash (–).",
+        "section": "typography"
+      },
+      {
+        "name": "The No-Eyebrow Rule",
+        "body": "Never place tracked uppercase kicker or eyebrow labels above headings or cards; section headers use quiet sentence-case labelLarge (14sp) in textTertiary.",
+        "section": "typography"
+      },
+      {
+        "name": "The Exterior-Only Shadow Rule",
+        "body": "Every GlassSurface shadow path is clipped with PathOperation.Difference (outerBounds - innerShape) before drawing so dark shadow blur never muddies the translucent glass interior.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Blur-Where-Needed Rule",
+        "body": "Chrome (18dp GraphicsLayer BlurEffect) and Sheet (24dp Android 12+ cross-window blur) refract underlying pixels when supported and automatically fall back to high-opacity fallbackFill on Android 10–11 or when system Reduce Motion (ANIMATOR_DURATION_SCALE == 0) is active; Card and Pill never blur (blurSigma = 0).",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do wrap all secondary screens in AppPage and all modal interactions or destructive confirmations in AppSheet / DshConfirmSheet (28dp top corners, Sheet-tier glass).",
+      "Do keep GlassSurface child text legible across Light and Dark modes by relying on LocalContentColor (colorScheme.onSurface) and DshColors.textTertiary (>= 4.5:1 for text, >= 3.0:1 for waveform bars and course dots).",
+      "Do decode real audio envelopes (AudioWaveformDecoder) for ScrubWaveformCanvas and show an honest flat baseline when audio is silent or unavailable.",
+      "Do maintain >= 48dp × 48dp touch targets on every interactive control and verify layouts at 1.3x system font scale with feathered top and bottom BackdropVeils."
+    ],
+    "donts": [
+      "Don't introduce opaque TopAppBar, NavigationBar, or Material AlertDialog slabs that break the full-bleed DshBackdrop and Mist Glass material system.",
+      "Don't place uppercase tracked eyebrows or kickers above headings, card titles, or hero blocks.",
+      "Don't parse raw neon timetable hex strings onto card surfaces or use low-contrast container pastels (identityBg) for small 4dp–9dp dots; map course names through DshColors.identityPair for large badges and DshColors.courseDot for dots and pips.",
+      "Don't apply real-time blur to scrolling Card or Pill list items, or run looping/spring animations when LocalReducedMotion.current is true."
+    ]
+  }
+}

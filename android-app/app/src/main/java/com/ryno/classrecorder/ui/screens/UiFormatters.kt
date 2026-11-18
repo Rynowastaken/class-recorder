@@ -105,6 +105,17 @@ object UiFormatters {
         else -> date.format(DAY_HEADER_FMT)
     }
 
+    fun formatFileSize(bytes: Long): String {
+        if (bytes <= 0L) return "0 KB"
+        val mb = 1024L * 1024L
+        return if (bytes >= mb) {
+            String.format(Locale.US, "%.1f MB", bytes.toDouble() / mb.toDouble())
+        } else {
+            val kb = (bytes / 1024L).coerceAtLeast(1L)
+            "$kb KB"
+        }
+    }
+
     /**
      * Deterministically previews `.m4a` filenames against `2026-11-18`, supporting all
      * RustCore template placeholders (including `{lesson number}` and `{lession number}`).

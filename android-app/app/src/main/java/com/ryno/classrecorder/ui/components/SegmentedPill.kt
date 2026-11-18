@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -171,6 +172,30 @@ fun <T> SegmentedPill(
             val segmentWidth = innerWidth / count
             val stepPx = with(density) { segmentWidth.toPx() }
             val insetPx = with(density) { inset.toPx().roundToInt() }
+            val textMeasurer = rememberTextMeasurer()
+            val baseLabelStyle = MaterialTheme.typography.labelLarge
+            val maxLabelPx = with(density) { (segmentWidth - 10.dp).toPx().coerceAtLeast(16f) }
+
+            val fittedFontSp = remember(segments, maxLabelPx, density.fontScale, density.density) {
+                var candidate = 13.5f
+                while (candidate > 10.0f) {
+                    val fitsAll = segments.all { seg ->
+                        val res = textMeasurer.measure(
+                            text = seg.label,
+                            style = baseLabelStyle.copy(
+                                fontSize = candidate.sp,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                        res.size.width <= maxLabelPx
+                    }
+                    if (fitsAll) break
+                    candidate -= 0.5f
+                }
+                candidate.sp
+            }
 
             Box(
                 modifier = Modifier
@@ -219,13 +244,13 @@ fun <T> SegmentedPill(
                                     }
                                 }
                             )
-                            .padding(horizontal = 6.dp),
+                            .padding(horizontal = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = seg.label,
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontSize = 13.5.sp,
+                            style = baseLabelStyle.copy(
+                                fontSize = fittedFontSp,
                                 fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal
                             ),
                             color = labelColor,
@@ -262,12 +287,22 @@ fun CapsuleChoiceChip(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    dotColor: Color? = null
+    dotColor: Color? = null,
+    courseKey: String? = null
 ) {
     val surfaces = ClassRecorderTheme.surfaces
+    val dsh = ClassRecorderTheme.dshColors
     val reduced = ClassRecorderTheme.reducedMotion
     val scheme = MaterialTheme.colorScheme
     val isDark = surfaces.darkTheme
+
+    val resolvedDot = when {
+        courseKey != null -> dsh.courseDot(
+            key = courseKey,
+            onDarkSurface = if (selected) !isDark else isDark
+        )
+        else -> dotColor
+    }
 
     val bg by animateColorAsState(
         targetValue = when {
@@ -300,12 +335,12 @@ fun CapsuleChoiceChip(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            if (dotColor != null) {
+            if (resolvedDot != null) {
                 Box(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(dotColor)
+                        .background(resolvedDot)
                 )
             }
             Text(

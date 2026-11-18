@@ -33,4 +33,27 @@ class OklchContrastTest {
             assertTrue(contrastRatio(dark.primary, dark.surfaceContainerHighest) >= 2.95)
         }
     }
+
+    @Test
+    fun courseDotColorsMeetNonTextContrastInLightAndDark() {
+        val sampleCourses = listOf("民法", "經濟學", "大學之道", "體育", "服務與學習", "資料結構", "微積分", "Uncategorized")
+        for (accent in AppAccent.presets) {
+            val lightScheme = DshPalette.lightScheme(accent)
+            val darkScheme = DshPalette.darkScheme(accent)
+            val lightDsh = DshColors.forAccent(false, accent)
+            val darkDsh = DshColors.forAccent(true, accent)
+            for (course in sampleCourses) {
+                val lightDot = lightDsh.courseDot(course, onDarkSurface = false)
+                val darkDot = darkDsh.courseDot(course, onDarkSurface = true)
+                assertTrue(
+                    "light dot $course on ${accent.id}",
+                    contrastRatio(lightDot, lightScheme.surfaceContainerLow) >= 3.0
+                )
+                assertTrue(
+                    "dark dot $course on ${accent.id}",
+                    contrastRatio(darkDot, darkScheme.surfaceContainerHigh) >= 3.0
+                )
+            }
+        }
+    }
 }

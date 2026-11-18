@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.sp
 import com.ryno.classrecorder.core.CourseSlot
 import com.ryno.classrecorder.ui.MainUiState
 import com.ryno.classrecorder.ui.components.AppSheet
+import com.ryno.classrecorder.ui.components.BackdropVeil
 import com.ryno.classrecorder.ui.components.DshPrimaryButton
 import com.ryno.classrecorder.ui.components.DshTextField
 import com.ryno.classrecorder.ui.components.EmptyView
@@ -109,8 +110,16 @@ fun ScheduleScreen(
 ) {
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
+    val reduced = ClassRecorderTheme.reducedMotion
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val listState = rememberLazyListState()
+
+    val canScrollDown by remember { derivedStateOf { listState.canScrollForward } }
+    val bottomVeilAlpha by animateFloatAsState(
+        targetValue = if (canScrollDown) 0.94f else 0f,
+        animationSpec = DshMotion.quickTween(reduced),
+        label = "scheduleBottomVeil"
+    )
 
     val today = remember { LocalDate.now() }
     val todayIndex = remember(today) { (today.dayOfWeek.value - 1).coerceIn(0, 6) }
@@ -168,7 +177,7 @@ fun ScheduleScreen(
                 start = AppSpace.gutter + sideInset,
                 end = AppSpace.gutter + sideInset,
                 top = topContentInset + 8.dp,
-                bottom = navBottom + 32.dp
+                bottom = navBottom + 44.dp
             ),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -245,6 +254,14 @@ fun ScheduleScreen(
                 }
             }
         }
+
+        BackdropVeil(
+            fromTop = false,
+            solidHeight = navBottom + 10.dp,
+            feather = 20.dp,
+            alpha = bottomVeilAlpha,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 
     if (showSourceSheet) {
@@ -435,13 +452,16 @@ private fun WeekStripCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             dayClasses.take(5).forEach { p ->
-                                val (pipColor, _) = dsh.identityPair(p.course.name)
+                                val pipColor = dsh.courseDot(
+                                    key = p.course.name,
+                                    onDarkSurface = ClassRecorderTheme.surfaces.darkTheme
+                                )
                                 Box(
                                     modifier = Modifier
-                                        .size(width = 5.dp, height = 3.5.dp)
+                                        .size(width = 5.5.dp, height = 4.dp)
                                         .clip(CircleShape)
                                         .background(
-                                            if (isSelected) scheme.onPrimary.copy(alpha = 0.85f)
+                                            if (isSelected) scheme.onPrimary.copy(alpha = 0.90f)
                                             else pipColor
                                         )
                                 )
@@ -462,7 +482,7 @@ private fun PeriodClassCard(
     val scheme = MaterialTheme.colorScheme
     val dsh = ClassRecorderTheme.dshColors
     val surfaces = ClassRecorderTheme.surfaces
-    val (identityBg, identityFg) = dsh.identityPair(period.course.name)
+    val dotColor = dsh.courseDot(period.course.name, surfaces.darkTheme)
     val detailLine = listOfNotNull(
         period.course.room.takeIf { it.isNotBlank() },
         period.course.teacher.takeIf { it.isNotBlank() }
@@ -517,7 +537,7 @@ private fun PeriodClassCard(
                         modifier = Modifier
                             .size(9.dp)
                             .clip(CircleShape)
-                            .background(if (surfaces.darkTheme) identityFg else identityBg)
+                            .background(dotColor)
                     )
                     Text(
                         text = period.course.name,

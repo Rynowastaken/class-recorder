@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -44,12 +45,11 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material.icons.rounded.Stop
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -61,6 +61,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -76,6 +79,7 @@ import com.ryno.classrecorder.ui.MainUiState
 import com.ryno.classrecorder.ui.components.AppSheet
 import com.ryno.classrecorder.ui.components.BackdropVeil
 import com.ryno.classrecorder.ui.components.CapsuleChoiceChip
+import com.ryno.classrecorder.ui.components.DshConfirmSheet
 import com.ryno.classrecorder.ui.components.DshPrimaryButton
 import com.ryno.classrecorder.ui.components.DshSecondaryButton
 import com.ryno.classrecorder.ui.components.EmptyView
@@ -84,12 +88,14 @@ import com.ryno.classrecorder.ui.components.GlassSurface
 import com.ryno.classrecorder.ui.components.ListCardDivider
 import com.ryno.classrecorder.ui.components.ListPageCard
 import com.ryno.classrecorder.ui.components.ListPageRow
+import com.ryno.classrecorder.ui.components.LocalBackdropLayer
 import com.ryno.classrecorder.ui.components.SearchCapsule
 import com.ryno.classrecorder.ui.components.SettingsIcon
 import com.ryno.classrecorder.ui.components.SheetGroup
 import com.ryno.classrecorder.ui.theme.AppShape
 import com.ryno.classrecorder.ui.theme.AppSpace
 import com.ryno.classrecorder.ui.theme.ClassRecorderTheme
+import com.ryno.classrecorder.ui.theme.DshMotion
 import com.ryno.classrecorder.ui.theme.GlassTier
 import com.ryno.classrecorder.ui.theme.StatusTone
 import com.ryno.classrecorder.ui.theme.tabular
@@ -262,14 +268,29 @@ fun LibraryScreen(
         }
     }
 
-    val bottomDockHeight = if (selectionMode && selectedIds.isNotEmpty()) navBottom + 96.dp else navBottom + 28.dp
+    val bottomDockHeight = if (selectionMode && selectedIds.isNotEmpty()) navBottom + 96.dp else navBottom + 44.dp
+    val reduced = ClassRecorderTheme.reducedMotion
+    val contentBackdropLayer = rememberGraphicsLayer()
+    val canScrollDown by remember { derivedStateOf { listState.canScrollForward } }
+    val bottomVeilAlpha by animateFloatAsState(
+        targetValue = if (selectionMode && selectedIds.isNotEmpty()) 0.92f else if (canScrollDown) 0.94f else 0f,
+        animationSpec = DshMotion.quickTween(reduced),
+        label = "libraryBottomVeil"
+    )
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val sideInset = ((maxWidth - AppSpace.readingWidth) / 2f).coerceAtLeast(0.dp)
 
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .drawWithContent {
+                    contentBackdropLayer.record {
+                        this@drawWithContent.drawContent()
+                    }
+                    drawLayer(contentBackdropLayer)
+                },
             contentPadding = PaddingValues(
                 start = AppSpace.gutter + sideInset,
                 end = AppSpace.gutter + sideInset,
@@ -355,11 +376,10 @@ fun LibraryScreen(
                             items = courseCounts,
                             key = { it.key }
                         ) { (courseName, count) ->
-                            val (dotBg, _) = dsh.identityPair(courseName)
                             CapsuleChoiceChip(
                                 label = "$courseName ($count)",
                                 selected = selectedCourse == courseName,
-                                dotColor = dotBg,
+                                courseKey = courseName,
                                 onClick = {
                                     selectedCourse = if (selectedCourse == courseName) null else courseName
                                 }
@@ -440,31 +460,34 @@ fun LibraryScreen(
             }
         }
 
+        BackdropVeil(
+            fromTop = false,
+            solidHeight = if (selectionMode && selectedIds.isNotEmpty()) navBottom + 76.dp else navBottom + 10.dp,
+            feather = 18.dp,
+            alpha = bottomVeilAlpha,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
+
         if (selectionMode && selectedIds.isNotEmpty()) {
-            BackdropVeil(
-                fromTop = false,
-                solidHeight = navBottom + 76.dp,
-                feather = 18.dp,
-                alpha = 0.92f,
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
-            SelectionDock(
-                selectedCount = selectedIds.size,
-                isExporting = isExporting,
-                onExportSelected = {
-                    exportSelectedOnly = true
-                    pendingExportCourse = null
-                    exportLauncher.launch("recordings_selected_${selectedIds.size}.zip")
-                },
-                onDeleteSelected = { showDeleteConfirm = true },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(
-                        start = AppSpace.floatInset + sideInset,
-                        end = AppSpace.floatInset + sideInset,
-                        bottom = navBottom + AppSpace.floatInset
-                    )
-            )
+            CompositionLocalProvider(LocalBackdropLayer provides contentBackdropLayer) {
+                SelectionDock(
+                    selectedCount = selectedIds.size,
+                    isExporting = isExporting,
+                    onExportSelected = {
+                        exportSelectedOnly = true
+                        pendingExportCourse = null
+                        exportLauncher.launch("recordings_selected_${selectedIds.size}.zip")
+                    },
+                    onDeleteSelected = { showDeleteConfirm = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(
+                            start = AppSpace.floatInset + sideInset,
+                            end = AppSpace.floatInset + sideInset,
+                            bottom = navBottom + AppSpace.floatInset
+                        )
+                )
+            }
         }
     }
 
@@ -500,31 +523,22 @@ fun LibraryScreen(
     }
 
     if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete ${selectedIds.size} ${if (selectedIds.size == 1) "recording" else "recordings"}?") },
-            text = { Text("Deleted lecture audio files are removed permanently from device storage.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val toDelete = selectedIds.toList()
-                        showDeleteConfirm = false
-                        selectionMode = false
-                        selectedIds = emptySet()
-                        toDelete.forEach { id ->
-                            if (playingId == id) stopInlinePlayer()
-                            onDeleteRecording(id)
-                        }
-                    }
-                ) {
-                    Text("Delete", color = dsh.danger)
+        DshConfirmSheet(
+            title = "Delete ${selectedIds.size} ${if (selectedIds.size == 1) "recording" else "recordings"}?",
+            message = "Deleted lecture audio files are removed permanently from device storage.",
+            confirmLabel = "Delete",
+            danger = true,
+            onConfirm = {
+                val toDelete = selectedIds.toList()
+                showDeleteConfirm = false
+                selectionMode = false
+                selectedIds = emptySet()
+                toDelete.forEach { id ->
+                    if (playingId == id) stopInlinePlayer()
+                    onDeleteRecording(id)
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Cancel")
-                }
-            }
+            onDismiss = { showDeleteConfirm = false }
         )
     }
 }

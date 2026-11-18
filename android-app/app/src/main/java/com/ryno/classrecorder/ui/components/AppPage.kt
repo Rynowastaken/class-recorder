@@ -1,5 +1,7 @@
 package com.ryno.classrecorder.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -17,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
@@ -25,12 +26,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -39,10 +40,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -53,15 +59,15 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.ryno.classrecorder.ui.theme.AppSpace
 import com.ryno.classrecorder.ui.theme.ClassRecorderTheme
+import com.ryno.classrecorder.ui.theme.DshMotion
 import com.ryno.classrecorder.ui.theme.tabular
 
 /**
  * Secondary full-screen page frame ported from DSH Go's AppPage in page_frame.dart.
  *
- * No opaque app bar slab: a floating glass back button sits top-left, the page
- * headline (or [hero]) sits inside the scroll column and fades out over the first
- * 60% of its height while a compact [title] rises smoothly into the top bar over
- * a feathered [BackdropVeil].
+ * Isolates pointer hit-testing and TalkBack traversal from any underlying route,
+ * records scroll content into a GPU [rememberGraphicsLayer] so floating Chrome buttons
+ * refract real pixels on Android 12+, and feathers both top and bottom system-bar zones.
  */
 @Composable
 fun AppPage(
@@ -74,7 +80,9 @@ fun AppPage(
     content: LazyListScope.() -> Unit
 ) {
     val density = LocalDensity.current
+    val reduced = ClassRecorderTheme.reducedMotion
     val listState = rememberLazyListState()
+    val backdropLayer = rememberGraphicsLayer()
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val barHeight = 56.dp
@@ -102,18 +110,45 @@ fun AppPage(
     val veilAlpha = (scrollOffsetPx / veilFadePx).coerceIn(0f, 1f)
     val titleSlideOffsetPx = with(density) { 6.dp.toPx() } * (1f - barTitleProgress)
 
-    DshBackdrop(modifier = modifier.fillMaxSize()) {
+    val canScrollDown by remember { derivedStateOf { listState.canScrollForward } }
+    val bottomVeilAlpha by animateFloatAsState(
+        targetValue = if (canScrollDown) 0.94f else 0f,
+        animationSpec = DshMotion.quickTween(reduced),
+        label = "appPageBottomVeil"
+    )
+
+    DshBackdrop(
+        modifier = modifier
+            .fillMaxSize()
+            .semantics { isTraversalGroup = true }
+            // Absorb non-interactive background taps so overlays never leak touches underneath.
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        event.changes.forEach { it.consume() }
+                    }
+                }
+            }
+    ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val sideInset = ((maxWidth - AppSpace.readingWidth) / 2f).coerceAtLeast(0.dp)
 
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .drawWithContent {
+                        backdropLayer.record {
+                            this@drawWithContent.drawContent()
+                        }
+                        drawLayer(backdropLayer)
+                    },
                 contentPadding = PaddingValues(
                     start = sideInset,
                     end = sideInset,
                     top = topReserved,
-                    bottom = navBottom + 32.dp
+                    bottom = navBottom + 44.dp
                 )
             ) {
                 item(key = "__app_page_header__") {
@@ -170,46 +205,56 @@ fun AppPage(
                 modifier = Modifier.align(Alignment.TopCenter)
             )
 
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = statusTop)
-                    .fillMaxWidth()
-                    .height(barHeight)
-                    .padding(horizontal = AppSpace.floatInset + sideInset),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                GlassIconButton(
-                    icon = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    onClick = onBack
-                )
+            BackdropVeil(
+                fromTop = false,
+                solidHeight = navBottom + 10.dp,
+                feather = 20.dp,
+                alpha = bottomVeilAlpha,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
 
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
+            CompositionLocalProvider(LocalBackdropLayer provides backdropLayer) {
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp)
-                        .graphicsLayer {
-                            alpha = barTitleProgress
-                            translationY = titleSlideOffsetPx
-                        }
-                )
-
-                Box(
-                    modifier = Modifier.sizeIn(minWidth = 48.dp),
-                    contentAlignment = Alignment.CenterEnd
+                        .align(Alignment.TopCenter)
+                        .padding(top = statusTop)
+                        .fillMaxWidth()
+                        .height(barHeight)
+                        .padding(horizontal = AppSpace.floatInset + sideInset),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        content = actions
+                    GlassIconButton(
+                        icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        onClick = onBack
                     )
+
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp)
+                            .graphicsLayer {
+                                alpha = barTitleProgress
+                                translationY = titleSlideOffsetPx
+                            }
+                    )
+
+                    Box(
+                        modifier = Modifier.sizeIn(minWidth = 48.dp),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            content = actions
+                        )
+                    }
                 }
             }
         }

@@ -30,4 +30,11 @@ class UiFormattersTest {
         assertEquals("48:12", UiFormatters.formatDuration((48 * 60 + 12) * 1000L))
         assertEquals("1:02:03", UiFormatters.formatDuration((3600 + 120 + 3) * 1000L))
     }
+
+    @Test
+    fun formatsFileSizeCleanly() {
+        assertEquals("0 KB", UiFormatters.formatFileSize(0L))
+        assertEquals("42 KB", UiFormatters.formatFileSize(42 * 1024L))
+        assertEquals("2.5 MB", UiFormatters.formatFileSize((2.5 * 1024 * 1024).toLong()))
+    }
 }
