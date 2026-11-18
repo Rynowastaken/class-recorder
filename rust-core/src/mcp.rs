@@ -142,7 +142,7 @@ async fn health_handler(State(state): State<Arc<McpState>>) -> Json<Value> {
     Json(json!({
         "status": "ok",
         "server": "class-recorder-mcp",
-        "version": "0.1.0",
+        "version": env!("CARGO_PKG_VERSION"),
         "hasSchedule": has_schedule,
         "recordingCount": count
     }))
