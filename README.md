@@ -1,110 +1,173 @@
 # Class Recorder
 
-**Class Recorder** is an Android lecture recorder made for students. Instead of leaving you with a pile of `Recording_042.m4a` files at finals week, it syncs with your class timetable, automatically tags and sorts every recording by course, and lets you review audio alongside lecture notes.
+**A lecture recorder that actually knows your timetable.**
+
+Most voice-recorder apps hand you `Recording_042.m4a` at finals week. Class Recorder syncs your class schedule, figures out which course you're sitting in right now, and files every lecture into its own folder with a filename that makes sense six months later.
 
 ---
 
-## Why Use Class Recorder?
+## What it looks like
 
-- **Knows What Class You're In**: Import your `uni-campus` share link or NUTC timetable once. Open the app during class (or up to 10 minutes early) and the right course, room, and period are already selected.
-- **Stays Out of Your Way**: Start, pause, resume, or finish with one thumb. Keeps recording reliably in the background with your screen locked, with live timer controls in your notification shade — plus **Android 16 Live Updates** and **Xiaomi HyperOS Island** support.
-- **Auto-Sorted Lecture Library**: Every `.m4a` recording is saved into its own course folder using a filename format you control. Filter by course, search across titles and notes, scrub through the visual waveform, adjust playback speed (`0.75×` to `2.0×`), or long-press to export multiple lectures as a `.zip`.
-- **Easy on the Eyes**: Built with the **Mist Glass** interface — choose Light, Dark, or System mode, pick from 6 soft color themes (*Mist*, *Daiqing*, *Dusk*, *Turquoise*, *Amber*, *Graphite*), or match your phone's wallpaper.
-- **Works with Your AI Study Tools *(Optional)***: Flip on the built-in **MCP Server** in Settings to let desktop or mobile AI assistants check your schedule, control recordings, or save structured Markdown summaries straight onto a lecture.
-
----
-
-## Quick Start
-
-### 1. Install the App
-1. Download the latest `ClassRecorder-v*-arm64-v8a.apk` from the [**Releases**](https://github.com/Rynowastaken/class-recorder/releases) page and install it on your Android phone (**Android 10+**, 64-bit ARM).
-2. Open the app and allow **Microphone** access (and **Notifications** so you can see and control recordings while the screen is off).
-
-### 2. Import Your Class Schedule
-1. Switch to the **Schedule** tab (or open **Settings** in the top-right corner).
-2. Tap **Sync** and paste your `uni-campus` share link (for example `https://uni-campus-app.pages.dev/s/...`), share code, or NUTC timetable JSON link.
-3. Your weekly classes will appear by day — tap any class card if you want to start recording for it right away.
-
-### 3. Record a Lecture
-1. On the **Recorder** tab, check the class card at the top:
-   - If a class is currently in session, it is selected automatically.
-   - Outside class hours (or if a class moved rooms), tap the card to pick any course manually or record as **Unscheduled**.
-2. Tap the **Record** button at the bottom.
-3. While recording, you can **Pause**, **Resume**, **Discard**, or **Finish** from either the app or the lock-screen notification.
-
-### 4. Listen Back, Take Notes & Export
-1. Open the **Recordings** tab to browse lectures grouped by day, or tap a course chip to see just one subject.
-2. Tap any recording to open the player:
-   - Drag across the waveform to jump to key moments.
-   - Change playback speed between `0.75×`, `1×`, `1.25×`, `1.5×`, and `2×`.
-   - Jot down timestamps or summaries in the **Lecture Notes** box and tap **Save**.
-   - Tap the **Share** icon in the top-right to send the `.m4a` file to Google Drive, Notion, Telegram, or your laptop.
-3. Need to back up a whole subject? **Long-press** any recording in the list to select multiple files and export them together as a single `.zip` archive.
+<table>
+<tr>
+<td align="center"><img src="docs/screenshots/recorder.png" width="230" alt="Recorder tab showing the current class and record button"><br><sub><b>Recorder</b> — knows you're in 大學之道, P2, room 3309</sub></td>
+<td align="center"><img src="docs/screenshots/schedule.png" width="230" alt="Weekly timetable with the current period highlighted"><br><sub><b>Schedule</b> — your week, with "Now" marked</sub></td>
+<td align="center"><img src="docs/screenshots/recordings.png" width="230" alt="Recordings grouped by day with course filters"><br><sub><b>Recordings</b> — grouped by day, filtered by course</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/screenshots/playback.png" width="230" alt="Playback screen with waveform, stats and lecture notes"><br><sub><b>Playback</b> — waveform, speed, and your notes</sub></td>
+<td align="center"><img src="docs/screenshots/settings.png" width="230" alt="Settings with theme and background options"><br><sub><b>Settings</b> — themes, wallpaper, MCP server</sub></td>
+<td></td>
+</tr>
+</table>
 
 ---
 
-## Customizing File Names
+## Why people use it
 
-In **Settings → Storage & Naming**, you can customize how recordings are named inside each course folder using placeholders:
+- **It knows what class you're in.** Import your schedule once. Open the app during (or up to 10 minutes before) a lecture and the right course, room, and period are already filled in. No typing, no naming files at 2am.
 
-| Placeholder | Example Output | Meaning |
+- **One thumb, screen off.** Start, pause, resume, finish. Recording keeps going with the screen locked, and the live timer is right there in your notification shade — including **Android 16 Live Updates** and **Xiaomi HyperOS Island** support.
+
+- **Nothing to organise later.** Every recording lands in its course folder with a filename you control. Search across titles and notes, filter by course, scrub the waveform, change speed, or long-press to export a whole subject as one `.zip`.
+
+- **Easy on the eyes.** The **Mist Glass** interface: Light, Dark, or System, six soft colour themes, or let it follow your wallpaper. You can also set your own photo as the background, with a blur slider so it never fights the text.
+
+- **Optional AI hooks.** Flip on the built-in **MCP server** and any AI assistant on your laptop can read your timetable, start a recording, or write study notes straight into a lecture.
+
+---
+
+## Getting started
+
+### 1. Install
+
+Grab the latest `ClassRecorder-v*-arm64-v8a.apk` from the [**Releases**](https://github.com/Rynowastaken/class-recorder/releases) page.
+
+Requires **Android 10 or newer** on a 64-bit ARM phone. Allow **Microphone** (obviously) and **Notifications** (so you can control recordings with the screen off).
+
+### 2. Bring in your timetable
+
+Open the **Schedule** tab, tap **Sync**, and paste your `uni-campus` share link, share code, or NUTC timetable JSON address. Your week fills in — tap any class to start recording for it directly.
+
+### 3. Record
+
+On the **Recorder** tab, the class card at the top tells you what's happening:
+
+| What it says | What it means |
+| :--- | :--- |
+| **In class** | You're in a scheduled lecture right now — just hit record |
+| **Upcoming class** | Next period, shown ahead of time |
+| **Ready** | Nothing scheduled; tap to pick a course or record as Unscheduled |
+
+Hit **Record** at the bottom. While recording you can **Pause**, **Resume**, **Discard**, or **Finish** from the app or from the notification.
+
+### 4. Review, annotate, share
+
+Open **Recordings** to browse by day or filter by course. Tap any lecture to:
+
+- drag across the waveform to jump to a moment
+- switch between `0.5×`, `1×`, `1.25×`, `1.5×`, and `2×`
+- write notes in **Lecture notes** and save
+- share the `.m4a` to Drive, Notion, Telegram, or your laptop
+
+To back up a whole subject, **long-press** a recording to enter selection mode and export everything as a single `.zip`.
+
+---
+
+## Making it yours
+
+### File names
+
+In **Settings → File naming** you control how recordings are named:
+
+| Placeholder | Output | Meaning |
 | :--- | :--- | :--- |
-| `{course}` | `Linear_Algebra` | Course name (or `Unscheduled`) |
-| `{date}` | `2026-11-18` | Recording date (`YYYY-MM-DD`, `YYYYMMDD`, or `MM-DD`) |
-| `{time}` | `0910` | Start time (`HHmm`) |
-| `{lesson_number}` | `03` | Sequential recording count for that course |
-| `{room}` | `3401` | Classroom number from your schedule |
+| `{class}` | `作業系統` | Course name (or `Uncategorized`) |
+| `{date}` | `2026-11-18` | Recording date (`yyyy-MM-dd`, `yyyyMMdd`, `MM-dd`, …) |
+| `{time}` | `1300` | Start time (`HHmm`) |
+| `{lesson number}` | `3` | How many recordings you've made for that course |
+| `{room}` | `1508` | Classroom from your schedule |
+| `{teacher}` | `黃世豪` | Instructor |
+| `{slot}` | `P5` | Period number |
 
-**Default template:** `{date}_{time}_{course}_{room}` → `Linear_Algebra/2026-11-18_0910_Linear_Algebra_3401.m4a`
+A live preview updates as you type, so you can see the result before saving.
+
+### Background
+
+**Settings → Background** lets you pick any photo as the app backdrop. It gets copied into app storage, rotated correctly, and blurred behind the glass cards. The **Blur** slider runs from sharp to fully frosted — the scrim underneath adjusts automatically based on how bright your photo is, so light images don't wash out the text.
+
+Tap **Reset** to go back to the built-in Mist gradient.
 
 ---
 
-## Optional Features
+## Optional extras
 
-### Live Island / Promoted Notifications (Android 16 & HyperOS)
-Class Recorder always shows a standard recording notification out of the box. On **Android 16+** and **Xiaomi HyperOS**, Android restricts live status-bar pills ("Live Updates") unless granted via shell permission:
+### Live island / promoted notifications
+
+Class Recorder always shows a normal recording notification. On **Android 16+** and **Xiaomi HyperOS**, the fancier status-bar pill is gated behind a shell permission:
 
 1. Install and start [Shizuku](https://shizuku.rikka.app/).
-2. Open **Class Recorder** (or tap the prompt in **Settings**).
-3. Approve the one-time Shizuku permission prompt — live recording timers will now appear directly in the status bar / HyperOS Island.
+2. Open Class Recorder and approve the one-time prompt in **Settings**.
+3. The live timer now appears in the status bar / HyperOS Island.
 
-### Connecting an AI Assistant (MCP)
-If you use an MCP-compatible AI app (such as Claude Code, Cursor, or a local study agent), you can connect it directly to Class Recorder:
+Without it, recording still works exactly the same — you just get the standard notification.
 
-1. Open **Settings → MCP Server** and turn it **On** (default port `8765`; you can also set an optional Bearer password).
-2. **Over Wi-Fi (same network):** Point your MCP client to the URL shown on screen (`http://<your-phone-ip>:8765/mcp`).
-3. **Over USB cable:** Forward the port with `adb forward tcp:8765 tcp:8765` and connect to `http://127.0.0.1:8765/mcp`.
+### Connecting an AI assistant (MCP)
 
-Once connected, your assistant can look up your timetable, check what class is happening right now, start/pause/stop a recording, list past lectures, and write study notes directly into a recording's notes field.
+If you use an MCP client like Claude Code, Cursor, or a local study agent:
+
+1. **Settings → MCP server** → turn it **On**. Default port is `8765`; you can add a Bearer password.
+2. **Same Wi-Fi:** point your client at `http://<phone-ip>:8765/mcp`.
+3. **Over USB:** `adb forward tcp:8765 tcp:8765`, then connect to `http://127.0.0.1:8765/mcp`.
+
+Your assistant can then check the timetable, see what class is happening now, start/stop recordings, list past lectures, and write notes into any recording.
 
 ---
 
 <details>
-<summary><strong>Building from Source (For Developers)</strong></summary>
+<summary><strong>Building from source</strong></summary>
 
-### Project Layout
-- `android-app/` — Jetpack Compose Android app (Kotlin 2.0, `minSdk 29`, `compileSdk 36`, DSH Go Mist Glass UI)
-- `rust-core/` — Rust core library (`rusqlite` SQLite storage, timetable parser, JNI bridge, `axum` MCP server)
-- `scripts/build-rust-android.sh` — Portable Android NDK build script for `libclass_recorder_core.so`
-- `PRODUCT.md` & `DESIGN.md` — Product overview and Mist Glass design system specification
+### Layout
 
-### Prerequisites
+| Path | What's in it |
+| :--- | :--- |
+| `android-app/` | Jetpack Compose app (Kotlin 2.0, `minSdk 29`, `compileSdk 36`) |
+| `rust-core/` | Rust core — SQLite storage, timetable parser, JNI bridge, `axum` MCP server |
+| `scripts/build-rust-android.sh` | NDK build script for `libclass_recorder_core.so` |
+| `PRODUCT.md`, `DESIGN.md` | Product brief and the Mist Glass design system |
+| `docs/screenshots/` | Screenshots used above |
+
+### You'll need
+
 - **JDK 17+**
-- **Android SDK** (`compileSdk 36`) and **Android NDK r27+** (`ANDROID_HOME` or `ANDROID_NDK_HOME` set)
-- **Rust** (`rustup target add aarch64-linux-android`)
+- **Android SDK** (`compileSdk 36`) and **NDK r27+** (`ANDROID_HOME` / `ANDROID_NDK_HOME`)
+- **Rust** with `rustup target add aarch64-linux-android`
 
-### Build Commands
+### Build
+
 ```bash
-# 1. Run Rust tests & build the arm64-v8a native library into jniLibs/
+# 1. Test and build the native library into jniLibs/
 cargo test --manifest-path rust-core/Cargo.toml
 ./scripts/build-rust-android.sh
 
-# 2. Run Android JVM unit tests & assemble optimized release APK
+# 2. Test and assemble the optimized release APK
 cd android-app
 ./gradlew :app:testClassrecorderTestDebugUnitTest :app:assembleClassrecorderRelease
 ```
 
-The shrunk release APK will be generated at `android-app/app/build/outputs/apk/classrecorder/release/app-classrecorder-release.apk`.  
-*(A side-by-side `classrecorderTest` flavor with isolated app ID `com.ryno.classrecorder.uitest` is also available via `:app:assembleClassrecorderTestDebug` so UI testing never touches your real recordings.)*
+Output: `android-app/app/build/outputs/apk/classrecorder/release/app-classrecorder-release.apk`
+
+A side-by-side `classrecorderTest` flavor (`com.ryno.classrecorder.uitest`) is available via `:app:assembleClassrecorderTestDebug` so UI testing never touches real recordings.
+
+### Signing
+
+Release builds fall back to the debug key when no keystore is configured. For Play Store or shared builds, supply:
+
+```bash
+export KEYSTORE_PATH=/path/to/release.jks
+export KEYSTORE_PASSWORD=...
+export KEY_ALIAS=...
+export KEY_PASSWORD=...
+```
 
 </details>
