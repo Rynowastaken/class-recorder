@@ -164,6 +164,7 @@ fun GlassSurface(
     }
 
     Box(
+        propagateMinConstraints = true,
         modifier = modifier
             .then(
                 if (canSampleLayerBlur) {

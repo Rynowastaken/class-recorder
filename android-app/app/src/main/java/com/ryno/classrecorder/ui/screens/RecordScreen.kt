@@ -767,7 +767,7 @@ private fun CaptureComposerDock(
                         danger = true,
                         onClick = onFinish,
                         minHeight = 52.dp,
-                        modifier = Modifier.defaultMinSize(minWidth = 116.dp)
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
