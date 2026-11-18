@@ -25,9 +25,9 @@ class UiFormattersTest {
         val slashCourse = UiFormatters.previewFilename(
             template = "{class}_{date}",
             dateFormat = "MM-dd",
-            courseName = "週會/班會"
+            courseName = "C++/Web: Lab"
         )
-        assertEquals("週會_班會_11-18.m4a", slashCourse)
+        assertEquals("C++_Web_ Lab_11-18.m4a", slashCourse)
     }
 
     @Test

@@ -1,3 +1,5 @@
+import java.io.File
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -9,33 +11,29 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        // The real package. Release/user installs keep this identity and its data.
         applicationId = "com.ryno.classrecorder"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
     }
 
-    // ---------------------------------------------------------------------
-    // Side-by-side test install.
-    //
-    // "classrecorderTest" gets its own applicationId, so it installs
-    // alongside the real app with a completely separate data directory. It
-    // never sees, migrates, or overwrites the recordings the user already
-    // has under com.ryno.classrecorder - which means a UI session can be
-    // tested, screenshotted, and even wrecked without touching real data.
-    //
-    //   ./gradle :app:assembleClassrecorderTestDebug
-    //   adb install -r app-classrecorderTest-debug.apk
-    //
-    // Source package (namespace) stays com.ryno.classrecorder, so no Kotlin
-    // file or manifest entry needs to change.
-    // ---------------------------------------------------------------------
+    signingConfigs {
+        val keystorePath = System.getenv("KEYSTORE_PATH")
+        if (!keystorePath.isNullOrBlank() && File(keystorePath).exists()) {
+            create("release") {
+                storeFile = File(keystorePath)
+                storePassword = System.getenv("KEYSTORE_PASSWORD").orEmpty()
+                keyAlias = System.getenv("KEY_ALIAS").orEmpty()
+                keyPassword = System.getenv("KEY_PASSWORD").orEmpty()
+            }
+        }
+    }
+
     flavorDimensions += "channel"
     productFlavors {
         create("classrecorder") {
@@ -52,7 +50,14 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
         }
     }
 
@@ -68,34 +73,41 @@ android {
     buildFeatures {
         compose = true
     }
+
+    lint {
+        // Workaround for androidx.lifecycle 2.8.x NonNullableMutableLiveDataDetector K2 UAST binary mismatch on AGP 8.7.x
+        disable += "NullSafeMutableLiveData"
+    }
+
+    packaging {
+        resources {
+            excludes += setOf(
+                "META-INF/*.version",
+                "META-INF/LICENSE*",
+                "META-INF/NOTICE*",
+                "DebugProbesKt.bin",
+                "kotlin-tooling-metadata.json"
+            )
+        }
+    }
 }
 
 dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.activity:activity-compose:1.9.3")
-    // Material 3 1.4.0 is the first stable release carrying the expressive
-    // system (MaterialExpressiveTheme, MotionScheme, expressive button groups,
-    // split buttons, floating toolbar, loading indicator). It is NOT in a BOM
-    // yet, so it is pinned directly.
-    //
-    // Compose is aligned on the 2025.09.01 BOM because M3 1.4.0 expects
-    // foundation/ui 1.8.x+. Mixing a newer runtime (which transitively resolves
-    // to 1.9.0) with older ui produced "Cannot access ... it is internal in
-    // file" errors from mismatched Kotlin metadata.
+
     implementation(platform("androidx.compose:compose-bom:2025.09.01"))
     implementation("androidx.compose.material3:material3:1.4.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3-adaptive-navigation-suite")
 
-    // Shizuku client. Lets us make one privileged binder call as shell uid
-    // (INotificationManager.setCanBePromoted) that no app can make for itself.
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
-    implementation("androidx.compose.material:material-icons-extended")
+
     testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

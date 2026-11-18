@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
@@ -64,8 +63,7 @@ import com.ryno.classrecorder.ui.theme.StatusTone
 import com.ryno.classrecorder.ui.theme.tabular
 
 /**
- * 44dp circular chrome-glass button inside a >= 48dp Android touch target,
- * ported from DSH Go's GlassIconButton in page_frame.dart.
+ * 44dp circular chrome-glass button inside a >= 48dp Android touch target.
  */
 @Composable
 fun GlassIconButton(
@@ -76,35 +74,27 @@ fun GlassIconButton(
     tier: GlassTier = GlassTier.Chrome,
     visualSize: Dp = 44.dp,
     iconSize: Dp = 20.dp,
-    enabled: Boolean = true,
     badgeTone: StatusTone? = null
 ) {
     val scheme = MaterialTheme.colorScheme
-    val dshColors = ClassRecorderTheme.dshColors
     val reducedMotion = ClassRecorderTheme.reducedMotion
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (enabled && isPressed && !reducedMotion) DshMotion.PRESS_SCALE else 1f,
+        targetValue = if (isPressed && !reducedMotion) DshMotion.PRESS_SCALE else 1f,
         animationSpec = DshMotion.pressSpring(reducedMotion),
         label = "glassIconBtnScale"
     )
 
-    // Outer 48dp touch target intentionally avoids .clip(CircleShape) so Chrome's
-    // 24dp outer drop shadow is never hard-truncated into a 2dp dark halo.
     Box(
         modifier = modifier
             .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-            .then(
-                if (enabled) {
-                    Modifier.clickable(
-                        interactionSource = interactionSource,
-                        indication = ripple(bounded = false, radius = visualSize / 2),
-                        role = Role.Button,
-                        onClickLabel = contentDescription,
-                        onClick = onClick
-                    )
-                } else Modifier
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(bounded = false, radius = visualSize / 2),
+                role = Role.Button,
+                onClickLabel = contentDescription,
+                onClick = onClick
             )
             .semantics {
                 this.contentDescription = contentDescription
@@ -133,7 +123,7 @@ fun GlassIconButton(
                         imageVector = icon,
                         contentDescription = null,
                         modifier = Modifier.size(iconSize),
-                        tint = if (enabled) scheme.onSurface else dshColors.textDisabled
+                        tint = scheme.onSurface
                     )
                 }
             }
@@ -151,14 +141,12 @@ fun GlassIconButton(
 }
 
 /**
- * Collapsible pill capsule ported from DSH Go's glass_pill.dart:
- * stadium capsule at rest, smoothly morphs to 14dp rounded card when expanded.
+ * Collapsible pill capsule ported from DSH Go's glass_pill.dart.
  */
 @Composable
 fun GlassPill(
     summary: @Composable RowScope.() -> Unit,
     modifier: Modifier = Modifier,
-    fillWidth: Boolean = true,
     onClick: (() -> Unit)? = null,
     expandedContent: (@Composable ColumnScope.() -> Unit)? = null
 ) {
@@ -170,15 +158,14 @@ fun GlassPill(
         label = "glassPillRadius"
     )
     GlassSurface(
-        modifier = if (fillWidth) modifier.fillMaxWidth() else modifier,
+        modifier = modifier.fillMaxWidth(),
         tier = GlassTier.Pill,
         shape = RoundedCornerShape(cornerRadius)
     ) {
-        Column(
-            modifier = if (fillWidth) Modifier.fillMaxWidth() else Modifier
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             Row(
-                modifier = (if (fillWidth) Modifier.fillMaxWidth() else Modifier)
+                modifier = Modifier
+                    .fillMaxWidth()
                     .defaultMinSize(minHeight = 48.dp)
                     .then(
                         if (onClick != null) {
@@ -216,7 +203,7 @@ fun GlassPill(
 }
 
 @Composable
-fun statusDotColor(tone: StatusTone): Color {
+private fun statusDotColor(tone: StatusTone): Color {
     val dsh = ClassRecorderTheme.dshColors
     val scheme = MaterialTheme.colorScheme
     return when (tone) {
@@ -230,13 +217,11 @@ fun statusDotColor(tone: StatusTone): Color {
 
 /**
  * Animated status indicator dot ported from DSH Go's status_chip.dart.
- * Pulses gently on Busy or Error unless system Reduce Motion is active.
  */
 @Composable
 fun StatusDot(
     tone: StatusTone,
     size: Dp = 7.dp,
-    animated: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val reduced = ClassRecorderTheme.reducedMotion
@@ -245,7 +230,7 @@ fun StatusDot(
         animationSpec = DshMotion.standardTween(reduced),
         label = "statusDotColor"
     )
-    val shouldPulse = animated && !reduced && (tone == StatusTone.Busy || tone == StatusTone.Error)
+    val shouldPulse = !reduced && (tone == StatusTone.Busy || tone == StatusTone.Error)
     val pulseAlpha = if (shouldPulse) {
         val transition = rememberInfiniteTransition(label = "statusDotPulse")
         val a by transition.animateFloat(

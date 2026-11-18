@@ -6,37 +6,40 @@ import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ryno.classrecorder.core.AppDefaults
 import com.ryno.classrecorder.core.CourseSlot
 import com.ryno.classrecorder.core.CurrentClassMatch
 import com.ryno.classrecorder.core.JsonModels
 import com.ryno.classrecorder.core.McpStatus
+import com.ryno.classrecorder.core.PromotionGrant
 import com.ryno.classrecorder.core.RecordingBridge
 import com.ryno.classrecorder.core.RecordingRecord
-import com.ryno.classrecorder.core.PromotionGrant
 import com.ryno.classrecorder.core.RustCore
 import com.ryno.classrecorder.core.UnifiedSchedule
 import com.ryno.classrecorder.service.RecordingService
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.Inet4Address
 import java.net.NetworkInterface
+import java.util.concurrent.atomic.AtomicLong
 
 data class MainUiState(
     val schedule: UnifiedSchedule? = null,
     val currentClass: CurrentClassMatch? = null,
     val selectedCourseOverride: CourseSlot? = null,
     val recordings: List<RecordingRecord> = emptyList(),
-    val mcpStatus: McpStatus = McpStatus(false, 8765, emptyList()),
+    val mcpStatus: McpStatus = McpStatus(false, AppDefaults.MCP_PORT, emptyList()),
     val lanIp: String = "127.0.0.1",
-    val scheduleSourceInput: String = "https://uni-campus-app.pages.dev/s/qVaaFS5A",
-    val filenameTemplate: String = "{class} {date} - {lesson number}",
-    val dateFormat: String = "yyyy-MM-dd",
+    val scheduleSourceInput: String = AppDefaults.SCHEDULE_URL,
+    val filenameTemplate: String = AppDefaults.FILENAME_TEMPLATE,
+    val dateFormat: String = AppDefaults.DATE_FORMAT,
     val themeMode: DshThemeMode = DshThemeMode.SYSTEM,
     val accentId: String = "mist",
     val isSyncing: Boolean = false,
@@ -55,45 +58,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application), R
 
     val recorderState = RecordingService.state
 
+    private val lastSeenDataVersion = AtomicLong(-1L)
+
     init {
         val ctx = getApplication<Application>()
         val recordingsDir = File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "Recordings")
         RustCore.initCore(ctx.filesDir.absolutePath, recordingsDir.absolutePath, this)
 
-        // Ask NotificationManagerService to mark our notifications promotable.
-        // Xposed-free, root-free: this is one binder call made as shell uid via
-        // Shizuku, and it runs off the main thread because pingBinder/transact
-        // are IPC. Failure is non-fatal - the app records fine without it.
         if (PromotionGrant.isShizukuReady() && PromotionGrant.hasPermission(ctx)) {
             viewModelScope.launch(Dispatchers.IO) {
                 val ok = PromotionGrant.request(ctx, enable = true)
-                android.util.Log.i("ClassRecorderPromo", "promotion granted=" + ok)
+                android.util.Log.i("ClassRecorderPromo", "promotion granted=$ok")
             }
         }
 
-        RecordingService.onRecordingFinished = {
-            refreshAll()
+        viewModelScope.launch {
+            RecordingService.finishedEvents.collect {
+                refreshAll()
+            }
         }
 
-        // Start MCP server automatically on launch so agents can connect immediately.
-        // Wrap it: a second install of this app (e.g. the .uitest package used for
-        // side-by-side UI testing) owns port 8765 already, and a bind failure must
-        // not take down ViewModel init and leave the app unusable.
-        runCatching { RustCore.startMcpServer(8765, "") }
-
+        runCatching { RustCore.startMcpServer(AppDefaults.MCP_PORT, "") }
         refreshAll()
-
-        // Periodically refresh MCP status & current class match
-        viewModelScope.launch(Dispatchers.IO) {
-            while (true) {
-                delay(4000)
-                refreshMcpAndCurrentClass()
-            }
-        }
     }
 
     fun refreshAll() {
         viewModelScope.launch(Dispatchers.IO) {
+            val version = RustCore.getDataVersion()
+
             val schedObj = JSONObject(RustCore.getScheduleJson())
             val sched = if (schedObj.optBoolean("ok")) {
                 JsonModels.parseSchedule(schedObj.optJSONObject("data"))
@@ -112,7 +104,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), R
             val mcpObj = JSONObject(RustCore.getMcpStatus())
             val mcp = if (mcpObj.optBoolean("ok")) {
                 JsonModels.parseMcpStatus(mcpObj.optJSONObject("data"))
-            } else McpStatus(false, 8765, emptyList())
+            } else McpStatus(false, AppDefaults.MCP_PORT, emptyList())
 
             val tmplObj = JSONObject(RustCore.getFilenameTemplate())
             val savedTmpl = if (tmplObj.optBoolean("ok")) {
@@ -124,21 +116,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application), R
                 fmtObj.optJSONObject("data")?.optString("dateFormat", "").orEmpty()
             } else ""
 
-            _ui.value = _ui.value.copy(
-                schedule = sched,
-                currentClass = cur,
-                recordings = recs,
-                mcpStatus = mcp,
-                lanIp = detectLanIp(),
-                filenameTemplate = savedTmpl.ifBlank { "{date}_{time}_{class}_{room}" },
-                dateFormat = savedFmt.ifBlank { "yyyy-MM-dd" },
-                scheduleSourceInput = sched?.sourceUrl?.takeIf { it.isNotBlank() }
-                    ?: _ui.value.scheduleSourceInput
-            )
+            val ip = detectLanIp()
+            lastSeenDataVersion.set(version)
+
+            _ui.update { prev ->
+                prev.copy(
+                    schedule = sched,
+                    currentClass = cur,
+                    recordings = recs,
+                    mcpStatus = mcp,
+                    lanIp = ip,
+                    filenameTemplate = savedTmpl.ifBlank { AppDefaults.FILENAME_TEMPLATE },
+                    dateFormat = savedFmt.ifBlank { AppDefaults.DATE_FORMAT },
+                    scheduleSourceInput = sched?.sourceUrl?.takeIf { it.isNotBlank() }
+                        ?: prev.scheduleSourceInput
+                )
+            }
         }
     }
 
-    private fun refreshMcpAndCurrentClass() {
+    /**
+     * Lightweight foreground-only tick invoked while the Activity is STARTED.
+     * Skips SQLite recordings/schedule reads unless Rust's atomic `dataVersion` changed,
+     * and avoids emitting duplicate states when nothing changed.
+     */
+    suspend fun refreshForegroundTick() = withContext(Dispatchers.IO) {
+        val currentVersion = RustCore.getDataVersion()
+        val versionChanged = currentVersion != lastSeenDataVersion.getAndSet(currentVersion)
+
         val curObj = JSONObject(RustCore.getCurrentClassJson())
         val cur = if (curObj.optBoolean("ok")) {
             JsonModels.parseCurrentClass(curObj.optJSONObject("data"))
@@ -149,37 +154,62 @@ class MainViewModel(application: Application) : AndroidViewModel(application), R
             JsonModels.parseMcpStatus(mcpObj.optJSONObject("data"))
         } else _ui.value.mcpStatus
 
-        val recObj = JSONObject(RustCore.listRecordings(""))
-        val recs = if (recObj.optBoolean("ok")) {
-            JsonModels.parseRecordings(recObj.optJSONArray("data"))
-        } else _ui.value.recordings
+        val recs = if (versionChanged) {
+            val recObj = JSONObject(RustCore.listRecordings(""))
+            if (recObj.optBoolean("ok")) {
+                JsonModels.parseRecordings(recObj.optJSONArray("data"))
+            } else _ui.value.recordings
+        } else {
+            _ui.value.recordings
+        }
 
-        _ui.value = _ui.value.copy(
-            currentClass = cur,
-            mcpStatus = mcp,
-            recordings = recs,
-            lanIp = detectLanIp()
-        )
+        val sched = if (versionChanged) {
+            val schedObj = JSONObject(RustCore.getScheduleJson())
+            if (schedObj.optBoolean("ok")) {
+                JsonModels.parseSchedule(schedObj.optJSONObject("data"))
+            } else _ui.value.schedule
+        } else {
+            _ui.value.schedule
+        }
+
+        _ui.update { prev ->
+            val next = prev.copy(
+                schedule = sched,
+                currentClass = cur,
+                mcpStatus = mcp,
+                recordings = recs
+            )
+            if (next == prev) prev else next
+        }
+    }
+
+    fun refreshLanIp() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val ip = detectLanIp()
+            _ui.update { if (it.lanIp == ip) it else it.copy(lanIp = ip) }
+        }
     }
 
     fun syncSchedule(sourceUrl: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            _ui.value = _ui.value.copy(isSyncing = true, statusMessage = null, scheduleSourceInput = sourceUrl)
+            _ui.update { it.copy(isSyncing = true, statusMessage = null, scheduleSourceInput = sourceUrl) }
             val res = JSONObject(RustCore.syncSchedule(sourceUrl))
             if (res.optBoolean("ok")) {
-                _ui.value = _ui.value.copy(isSyncing = false, statusMessage = "Schedule synced")
+                _ui.update { it.copy(isSyncing = false, statusMessage = "Schedule synced") }
                 refreshAll()
             } else {
-                _ui.value = _ui.value.copy(
-                    isSyncing = false,
-                    statusMessage = res.optString("error", "Sync failed")
-                )
+                _ui.update {
+                    it.copy(
+                        isSyncing = false,
+                        statusMessage = res.optString("error", "Sync failed")
+                    )
+                }
             }
         }
     }
 
     fun selectCourseOverride(course: CourseSlot?) {
-        _ui.value = _ui.value.copy(selectedCourseOverride = course)
+        _ui.update { it.copy(selectedCourseOverride = course) }
     }
 
     fun startRecording() {
@@ -201,7 +231,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), R
             put("room", course.room)
             put("slot", slot)
         }.toString()
-        _ui.value = _ui.value.copy(selectedCourseOverride = course)
+        _ui.update { it.copy(selectedCourseOverride = course) }
         RecordingService.start(getApplication(), json)
     }
 
@@ -211,7 +241,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), R
 
     fun discardRecording() {
         RecordingService.discard(getApplication())
-        _ui.value = _ui.value.copy(statusMessage = "Recording discarded")
+        _ui.update { it.copy(statusMessage = "Recording discarded") }
     }
 
     fun togglePause() {
@@ -220,8 +250,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), R
 
     fun updateNotes(id: String, notes: String, tags: List<String>) {
         viewModelScope.launch(Dispatchers.IO) {
-            val tagsJson = JSONArray(tags).toString()
-            RustCore.updateRecordingNotes(id, notes, tagsJson)
+            RustCore.updateRecordingNotes(id, notes, JSONArray(tags).toString())
             refreshAll()
         }
     }
@@ -233,17 +262,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application), R
         }
     }
 
-    fun toggleMcpServer(port: Int = 8765, authToken: String = "") {
+    fun toggleMcpServer(port: Int = AppDefaults.MCP_PORT, authToken: String = "") {
         viewModelScope.launch(Dispatchers.IO) {
             if (_ui.value.mcpStatus.running) {
                 RustCore.stopMcpServer()
             } else {
                 val res = JSONObject(RustCore.startMcpServer(port, authToken))
                 if (!res.optBoolean("ok")) {
-                    _ui.value = _ui.value.copy(statusMessage = res.optString("error", "MCP failed"))
+                    _ui.update { it.copy(statusMessage = res.optString("error", "MCP failed")) }
                 }
             }
-            refreshMcpAndCurrentClass()
+            val ip = detectLanIp()
+            _ui.update { it.copy(lanIp = ip) }
+            refreshForegroundTick()
         }
     }
 
@@ -251,34 +282,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application), R
         viewModelScope.launch(Dispatchers.IO) {
             RustCore.setFilenameTemplate(template)
             RustCore.setDateFormat(dateFormat)
-            _ui.value = _ui.value.copy(
-                filenameTemplate = template.ifBlank { "{date}_{time}_{class}_{room}" },
-                dateFormat = dateFormat.ifBlank { "yyyy-MM-dd" },
-                statusMessage = "Filename format saved"
-            )
+            _ui.update {
+                it.copy(
+                    filenameTemplate = template.ifBlank { AppDefaults.FILENAME_TEMPLATE },
+                    dateFormat = dateFormat.ifBlank { AppDefaults.DATE_FORMAT },
+                    statusMessage = "Filename format saved"
+                )
+            }
         }
     }
 
     fun setThemeMode(mode: DshThemeMode) {
         AppearancePreferences.saveThemeMode(getApplication(), mode)
-        _ui.value = _ui.value.copy(themeMode = mode)
+        _ui.update { it.copy(themeMode = mode) }
     }
 
     fun setAccentId(accentId: String) {
         val valid = AppearancePreferences.parseAccentId(accentId)
         AppearancePreferences.saveAccentId(getApplication(), valid)
-        _ui.value = _ui.value.copy(accentId = valid)
+        _ui.update { it.copy(accentId = valid) }
     }
 
     fun showMessage(msg: String) {
-        _ui.value = _ui.value.copy(statusMessage = msg)
+        _ui.update { it.copy(statusMessage = msg) }
     }
 
     fun clearMessage() {
-        _ui.value = _ui.value.copy(statusMessage = null)
+        _ui.update { it.copy(statusMessage = null) }
     }
 
-    // Called from Rust MCP threads via JNI
+    // Called from Rust MCP spawn_blocking threads via JNI
     override fun startRecordingFromAgent(courseJson: String): String {
         val ctx = getApplication<Application>()
         if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO)
@@ -290,24 +323,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application), R
             return JSONObject().put("error", "A recording is already active").toString()
         }
         RecordingService.start(ctx, courseJson)
-        // Wait briefly for RecordingService to prepare and enter recording state
         for (i in 0 until 20) {
             Thread.sleep(100)
             val active = RecordingService.state.value.activeRecording
             if (RecordingService.state.value.isRecording && active != null) {
-                return JSONObject().put("recording", JSONObject().apply {
-                    put("id", active.id)
-                    put("filePath", active.filePath)
-                    put("courseName", active.courseName)
-                    put("teacher", active.teacher)
-                    put("room", active.room)
-                    put("slot", active.slot)
-                    put("startedAt", active.startedAt)
-                    put("durationMs", active.durationMs)
-                    put("status", active.status)
-                    put("notes", active.notes)
-                    put("tags", JSONArray(active.tags))
-                }).toString()
+                return JSONObject().put("recording", active.toJsonObject()).toString()
             }
         }
         return JSONObject().put("error", "Timed out waiting for RecordingService to start").toString()
@@ -323,32 +343,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application), R
                 val res = JSONObject(RustCore.listRecordings(""))
                 val list = JsonModels.parseRecordings(res.optJSONArray("data"))
                 val updated = list.firstOrNull { it.id == active.id } ?: active.copy(status = "completed")
-                return JSONObject().put("recording", JSONObject().apply {
-                    put("id", updated.id)
-                    put("filePath", updated.filePath)
-                    put("courseName", updated.courseName)
-                    put("teacher", updated.teacher)
-                    put("room", updated.room)
-                    put("slot", updated.slot)
-                    put("startedAt", updated.startedAt)
-                    put("durationMs", updated.durationMs)
-                    put("status", updated.status)
-                    put("notes", updated.notes)
-                    put("tags", JSONArray(updated.tags))
-                }).toString()
+                return JSONObject().put("recording", updated.toJsonObject()).toString()
             }
         }
         return JSONObject().put("error", "Timed out waiting for RecordingService to stop").toString()
     }
 
-    private fun detectLanIp(): String {
-        return try {
-            NetworkInterface.getNetworkInterfaces()?.toList()
-                ?.flatMap { it.inetAddresses.toList() }
-                ?.firstOrNull { !it.isLoopbackAddress && it is Inet4Address }
-                ?.hostAddress ?: "127.0.0.1"
-        } catch (_: Exception) {
-            "127.0.0.1"
-        }
+    private fun detectLanIp(): String = try {
+        NetworkInterface.getNetworkInterfaces()?.toList()
+            ?.flatMap { it.inetAddresses.toList() }
+            ?.firstOrNull { !it.isLoopbackAddress && it is Inet4Address }
+            ?.hostAddress ?: "127.0.0.1"
+    } catch (_: Exception) {
+        "127.0.0.1"
     }
 }

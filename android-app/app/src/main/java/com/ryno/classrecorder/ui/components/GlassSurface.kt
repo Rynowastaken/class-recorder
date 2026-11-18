@@ -3,10 +3,8 @@ package com.ryno.classrecorder.ui.components
 import android.graphics.BlurMaskFilter
 import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -27,9 +25,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
@@ -56,30 +55,17 @@ import com.ryno.classrecorder.ui.theme.AppShape
 import com.ryno.classrecorder.ui.theme.ClassRecorderTheme
 import com.ryno.classrecorder.ui.theme.DshMotion
 import com.ryno.classrecorder.ui.theme.GlassShadow
-import com.ryno.classrecorder.ui.theme.GlassStyle
 import com.ryno.classrecorder.ui.theme.GlassTier
+import kotlin.math.abs
 import kotlin.math.max
 
-/**
- * Live GPU [GraphicsLayer] recorded from the scrolling scene underneath floating
- * Chrome surfaces so [GlassSurface] can refract and blur real underlying pixels on Android 12+.
- */
 val LocalBackdropLayer = compositionLocalOf<GraphicsLayer?> { null }
-
-/**
- * Signals whether the enclosing Dialog/Sheet window has active OS-level cross-window blur.
- */
 val LocalWindowBlurActive = compositionLocalOf { false }
 
 /**
- * Four-tier DSH Go glass surface, ported from glass.dart:
- *  1. Outer-only clipped drop shadows (never muddies translucent interior)
- *  2. Real Android 12+ GraphicsLayer / Window backdrop blur for Chrome & Sheet tiers
- *     (automatically degrading to opaque/frosted fallbackFill when unsupported or reducedMotion)
- *  3. Inset 0.5dp hairline stroke + top-to-45% vertical rim highlight
- *  4. Press scale (0.97f) + LocalContentColor = colorScheme.onSurface
+ * Four-tier DSH Go glass surface with cached outer shadows, cached edge hairlines/rims,
+ * and Android 12+ GraphicsLayer / Window backdrop blur for Chrome & Sheet tiers.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GlassSurface(
     modifier: Modifier = Modifier,
@@ -87,9 +73,7 @@ fun GlassSurface(
     shape: Shape? = null,
     circle: Boolean = false,
     stadium: Boolean = false,
-    styleOverride: GlassStyle? = null,
     onClick: (() -> Unit)? = null,
-    onLongClick: (() -> Unit)? = null,
     enabled: Boolean = true,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     content: @Composable BoxScope.() -> Unit
@@ -99,7 +83,7 @@ fun GlassSurface(
     val density = LocalDensity.current
     val backdropLayer = LocalBackdropLayer.current
     val windowBlurActive = LocalWindowBlurActive.current
-    val s = styleOverride ?: surfaces.glass(tier)
+    val s = surfaces.glass(tier)
 
     val resolvedShape: Shape = when {
         circle -> CircleShape
@@ -137,39 +121,43 @@ fun GlassSurface(
     val blurRadiusPx = remember(s.blurSigma, density) {
         with(density) { s.blurSigma.dp.toPx() }
     }
+    val cachedBlurEffect = remember(canSampleLayerBlur, blurRadiusPx) {
+        if (canSampleLayerBlur && blurRadiusPx > 0.5f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            BlurEffect(
+                radiusX = blurRadiusPx,
+                radiusY = blurRadiusPx,
+                edgeTreatment = TileMode.Clamp
+            )
+        } else null
+    }
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val interactive = enabled && (onClick != null || onLongClick != null)
+    val interactive = enabled && onClick != null
     val scale by animateFloatAsState(
         targetValue = if (interactive && isPressed && !reducedMotion) DshMotion.PRESS_SCALE else 1f,
         animationSpec = DshMotion.pressSpring(reducedMotion),
         label = "glassPressScale"
     )
 
-    val clickModifier = when {
-        !interactive -> Modifier
-        onLongClick != null -> Modifier.combinedClickable(
-            interactionSource = interactionSource,
-            indication = ripple(),
-            onClick = { onClick?.invoke() },
-            onLongClick = onLongClick
-        )
-        onClick != null -> Modifier.clickable(
+    val clickModifier = if (enabled && onClick != null) {
+        Modifier.clickable(
             interactionSource = interactionSource,
             indication = ripple(),
             onClick = onClick
         )
-        else -> Modifier
-    }
+    } else Modifier
 
     Box(
         propagateMinConstraints = true,
         modifier = modifier
             .then(
-                if (canSampleLayerBlur) {
+                if (cachedBlurEffect != null) {
                     Modifier.onGloballyPositioned { coords ->
-                        rootOffset = coords.positionInRoot()
+                        val next = coords.positionInRoot()
+                        if (abs(next.x - rootOffset.x) > 0.5f || abs(next.y - rootOffset.y) > 0.5f) {
+                            rootOffset = next
+                        }
                     }
                 } else Modifier
             )
@@ -187,28 +175,22 @@ fun GlassSurface(
                 rim = s.rim
             )
     ) {
-        if (canSampleLayerBlur && blurRadiusPx > 0.5f) {
-            val layerToDraw = backdropLayer ?: return@Box
+        if (cachedBlurEffect != null && backdropLayer != null) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer {
-                        renderEffect = BlurEffect(
-                            radiusX = blurRadiusPx,
-                            radiusY = blurRadiusPx,
-                            edgeTreatment = TileMode.Clamp
-                        )
+                        renderEffect = cachedBlurEffect
                     }
                     .drawBehind {
-                        val rootW = max(size.width, layerToDraw.size.width.toFloat())
-                        val rootH = max(size.height, layerToDraw.size.height.toFloat())
+                        val rootW = max(size.width, backdropLayer.size.width.toFloat())
+                        val rootH = max(size.height, backdropLayer.size.height.toFloat())
                         translate(left = -rootOffset.x, top = -rootOffset.y) {
                             drawBackdropLayer(
                                 canvasSize = Size(rootW, rootH),
-                                surfaces = surfaces,
-                                glow = true
+                                surfaces = surfaces
                             )
-                            drawLayer(layerToDraw)
+                            drawLayer(backdropLayer)
                         }
                     }
             )
@@ -221,7 +203,6 @@ fun GlassSurface(
         Box(modifier = Modifier.padding(contentPadding)) {
             CompositionLocalProvider(
                 LocalContentColor provides MaterialTheme.colorScheme.onSurface,
-                // Nested GlassSurfaces inside Chrome/Sheet should not re-blur an already blurred surface
                 LocalBackdropLayer provides if (canSampleLayerBlur) null else backdropLayer
             ) {
                 content()
@@ -235,48 +216,58 @@ private fun Modifier.drawGlassEdges(
     hairline: Color,
     hairlineWidthDp: Float,
     rim: Color
-): Modifier = this.drawWithContent {
-    drawContent()
-    if (size.isEmpty()) return@drawWithContent
+): Modifier = this.drawWithCache {
+    if (size.isEmpty()) {
+        return@drawWithCache onDrawWithContent { drawContent() }
+    }
     val strokePx = max(hairlineWidthDp.dp.toPx(), 1f)
     val inset = strokePx * 0.5f
     val innerSize = Size(
         width = (size.width - strokePx).coerceAtLeast(0f),
         height = (size.height - strokePx).coerceAtLeast(0f)
     )
-    if (innerSize.isEmpty()) return@drawWithContent
+    if (innerSize.isEmpty()) {
+        return@drawWithCache onDrawWithContent { drawContent() }
+    }
 
     val outline = shape.createOutline(innerSize, layoutDirection, this)
     val path = outlineToPath(outline, offsetX = inset, offsetY = inset)
+    val hairlineStroke = Stroke(width = strokePx)
+    val rimStroke = Stroke(width = max(strokePx, 1.1f))
+    val rimBrush = if (rim.alpha > 0f) {
+        Brush.verticalGradient(
+            0f to rim,
+            0.45f to rim.copy(alpha = 0f),
+            startY = 0f,
+            endY = size.height
+        )
+    } else null
 
-    if (hairline.alpha > 0f) {
-        drawPath(
-            path = path,
-            color = hairline,
-            style = Stroke(width = strokePx)
-        )
-    }
-    if (rim.alpha > 0f) {
-        drawPath(
-            path = path,
-            brush = Brush.verticalGradient(
-                0f to rim,
-                0.45f to rim.copy(alpha = 0f),
-                startY = 0f,
-                endY = size.height
-            ),
-            style = Stroke(width = max(strokePx, 1.1f))
-        )
+    onDrawWithContent {
+        drawContent()
+        if (hairline.alpha > 0f) {
+            drawPath(path = path, color = hairline, style = hairlineStroke)
+        }
+        if (rimBrush != null) {
+            drawPath(path = path, brush = rimBrush, style = rimStroke)
+        }
     }
 }
+
+private class CachedShadowEntry(
+    val path: android.graphics.Path,
+    val paint: android.graphics.Paint
+)
 
 private fun Modifier.drawOuterGlassShadows(
     shape: Shape,
     shadows: List<GlassShadow>
 ): Modifier {
     if (shadows.isEmpty()) return this
-    return this.drawBehind {
-        if (size.isEmpty()) return@drawBehind
+    return this.drawWithCache {
+        if (size.isEmpty()) {
+            return@drawWithCache onDrawBehind {}
+        }
         val shapeOutline = shape.createOutline(size, layoutDirection, this)
         val innerPath = outlineToPath(shapeOutline, 0f, 0f)
         var maxExtent = 0f
@@ -293,27 +284,32 @@ private fun Modifier.drawOuterGlassShadows(
                 )
             )
         }
-        val exteriorClip = Path.combine(PathOperation.Difference, outerBounds, innerPath)
-
-        drawIntoCanvas { canvas ->
-            val native = canvas.nativeCanvas
-            val saveCount = native.save()
-            native.clipPath(exteriorClip.asAndroidPath())
+        val exteriorClip = Path.combine(PathOperation.Difference, outerBounds, innerPath).asAndroidPath()
+        val entries = shadows.mapNotNull { sh ->
+            if (sh.color.alpha <= 0f) return@mapNotNull null
+            val blurPx = sh.blurRadius.toPx()
             val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                 style = android.graphics.Paint.Style.FILL
+                color = sh.color.toArgb()
+                if (blurPx > 0.5f) {
+                    maskFilter = BlurMaskFilter(blurPx, BlurMaskFilter.Blur.NORMAL)
+                }
             }
-            for (sh in shadows) {
-                if (sh.color.alpha <= 0f) continue
-                val blurPx = sh.blurRadius.toPx()
-                paint.color = sh.color.toArgb()
-                paint.maskFilter = if (blurPx > 0.5f) {
-                    BlurMaskFilter(blurPx, BlurMaskFilter.Blur.NORMAL)
-                } else null
-                val shiftedOutline = shape.createOutline(size, layoutDirection, this)
-                val shadowPath = outlineToPath(shiftedOutline, 0f, sh.offsetY.toPx())
-                native.drawPath(shadowPath.asAndroidPath(), paint)
+            val shiftedPath = outlineToPath(shapeOutline, 0f, sh.offsetY.toPx()).asAndroidPath()
+            CachedShadowEntry(shiftedPath, paint)
+        }
+
+        onDrawBehind {
+            if (entries.isEmpty()) return@onDrawBehind
+            drawIntoCanvas { canvas ->
+                val native = canvas.nativeCanvas
+                val saveCount = native.save()
+                native.clipPath(exteriorClip)
+                for (entry in entries) {
+                    native.drawPath(entry.path, entry.paint)
+                }
+                native.restoreToCount(saveCount)
             }
-            native.restoreToCount(saveCount)
         }
     }
 }
@@ -322,7 +318,7 @@ private fun outlineToPath(outline: Outline, offsetX: Float, offsetY: Float): Pat
     when (outline) {
         is Outline.Rectangle -> addRect(outline.rect.translate(offsetX, offsetY))
         is Outline.Rounded -> addRoundRect(
-            androidx.compose.ui.geometry.RoundRect(
+            RoundRect(
                 rect = outline.roundRect.let {
                     Rect(it.left + offsetX, it.top + offsetY, it.right + offsetX, it.bottom + offsetY)
                 },
@@ -332,8 +328,6 @@ private fun outlineToPath(outline: Outline, offsetX: Float, offsetY: Float): Pat
                 bottomLeft = outline.roundRect.bottomLeftCornerRadius
             )
         )
-        is Outline.Generic -> {
-            addPath(outline.path, Offset(offsetX, offsetY))
-        }
+        is Outline.Generic -> addPath(outline.path, Offset(offsetX, offsetY))
     }
 }

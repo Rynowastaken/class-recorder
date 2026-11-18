@@ -12,18 +12,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -49,27 +52,68 @@ fun rememberSafeSideInsets(maxWidth: Dp): Pair<Dp, Dp> {
 }
 
 /**
+ * Reports normalized `0f..1f` scroll-under progress for a root tab's [LazyListState]
+ * so the top [BackdropVeil] fades in smoothly once list content passes beneath the Chrome bar.
+ */
+@Composable
+fun BindScrollUnderVeil(
+    listState: LazyListState,
+    onScrolledUnderChange: (Float) -> Unit
+) {
+    val density = LocalDensity.current
+    val scrollFraction by remember(density) {
+        val fadePx = with(density) { 28.dp.toPx() }
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex > 0) 1f
+            else (listState.firstVisibleItemScrollOffset / fadePx).coerceIn(0f, 1f)
+        }
+    }
+    LaunchedEffect(scrollFraction) {
+        onScrolledUnderChange(scrollFraction)
+    }
+}
+
+/**
  * Full-bleed DSH Go page backdrop: vertical Mist/Slate gradient + two wide
- * low-alpha corner radial glows so translucent glass picks up soft ambient light.
- *
- * Shared at the root of the app so swiping tabs keeps the background stationary.
+ * low-alpha corner radial glows cached per canvas size.
  */
 @Composable
 fun DshBackdrop(
     modifier: Modifier = Modifier,
-    glow: Boolean = true,
     content: @Composable BoxScope.() -> Unit
 ) {
     val s = ClassRecorderTheme.surfaces
     Box(
         modifier = modifier
             .fillMaxSize()
-            .drawBehind {
-                drawBackdropLayer(
-                    canvasSize = size,
-                    surfaces = s,
-                    glow = glow
+            .drawWithCache {
+                val bgBrush = Brush.verticalGradient(
+                    colors = listOf(s.backdropTop, s.backdropBottom),
+                    startY = 0f,
+                    endY = size.height
                 )
+                val longest = max(size.width, size.height)
+                val center1 = Offset(size.width * 0.92f, 0f)
+                val radius1 = (longest * 0.62f).coerceAtLeast(1f)
+                val glow1 = Brush.radialGradient(
+                    colors = listOf(s.glowPrimary, s.glowPrimary.copy(alpha = 0f)),
+                    center = center1,
+                    radius = radius1
+                )
+                val center2 = Offset(0f, size.height)
+                val radius2 = (longest * 0.55f).coerceAtLeast(1f)
+                val glow2 = Brush.radialGradient(
+                    colors = listOf(s.glowSecondary, s.glowSecondary.copy(alpha = 0f)),
+                    center = center2,
+                    radius = radius2
+                )
+                onDrawBehind {
+                    drawRect(brush = bgBrush)
+                    if (longest > 0f) {
+                        drawCircle(brush = glow1, radius = radius1, center = center1)
+                        drawCircle(brush = glow2, radius = radius2, center = center2)
+                    }
+                }
             },
         content = content
     )
@@ -77,7 +121,7 @@ fun DshBackdrop(
 
 /**
  * Feathered backdrop band placed behind floating top/bottom chrome once content
- * scrolls underneath, ported from DSH Go's BackdropVeil in backdrop.dart.
+ * scrolls underneath. Uses a single cached 3-stop gradient with zero Offscreen layer passes.
  */
 @Composable
 fun BackdropVeil(
@@ -96,46 +140,36 @@ fun BackdropVeil(
             .height(totalHeight)
             .graphicsLayer {
                 this.alpha = alpha.coerceIn(0f, 1f)
-                compositingStrategy = CompositingStrategy.Offscreen
             }
-            .drawWithContent {
+            .drawWithCache {
                 val bandH = size.height
-                if (bandH <= 0f) return@drawWithContent
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        colors = if (fromTop) {
-                            listOf(s.backdropTop, s.backdropTop.copy(alpha = 0.96f))
-                        } else {
-                            listOf(s.backdropBottom.copy(alpha = 0.96f), s.backdropBottom)
-                        }
-                    )
-                )
-                val featherFrac = (feather.toPx() / bandH).coerceIn(0f, 1f)
-                val maskStops = if (fromTop) {
+                val featherFrac = if (bandH > 0f) (feather.toPx() / bandH).coerceIn(0f, 1f) else 0f
+                val stops = if (fromTop) {
                     arrayOf(
-                        0f to Color.Black,
-                        (1f - featherFrac).coerceAtLeast(0f) to Color.Black,
+                        0f to s.backdropTop,
+                        (1f - featherFrac).coerceAtLeast(0f) to s.backdropTop.copy(alpha = 0.96f),
                         1f to Color.Transparent
                     )
                 } else {
                     arrayOf(
                         0f to Color.Transparent,
-                        featherFrac to Color.Black,
-                        1f to Color.Black
+                        featherFrac to s.backdropBottom.copy(alpha = 0.96f),
+                        1f to s.backdropBottom
                     )
                 }
-                drawRect(
-                    brush = Brush.verticalGradient(*maskStops),
-                    blendMode = BlendMode.DstIn
-                )
+                val brush = Brush.verticalGradient(*stops)
+                onDrawBehind {
+                    if (bandH > 0f) {
+                        drawRect(brush = brush)
+                    }
+                }
             }
     )
 }
 
 internal fun DrawScope.drawBackdropLayer(
     canvasSize: Size,
-    surfaces: DshSurfaces,
-    glow: Boolean = true
+    surfaces: DshSurfaces
 ) {
     drawRect(
         brush = Brush.verticalGradient(
@@ -146,7 +180,7 @@ internal fun DrawScope.drawBackdropLayer(
         size = canvasSize
     )
     val longest = max(canvasSize.width, canvasSize.height)
-    if (glow && longest > 0f) {
+    if (longest > 0f) {
         val center1 = Offset(canvasSize.width * 0.92f, 0f)
         val radius1 = longest * 0.62f
         drawCircle(

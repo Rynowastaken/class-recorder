@@ -1,7 +1,7 @@
 package com.ryno.classrecorder.ui.components
 
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -25,9 +25,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,7 +36,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -61,20 +57,19 @@ import com.ryno.classrecorder.ui.theme.AppSpace
 import com.ryno.classrecorder.ui.theme.ClassRecorderTheme
 import com.ryno.classrecorder.ui.theme.DshMotion
 import com.ryno.classrecorder.ui.theme.tabular
+import kotlinx.coroutines.CancellationException
 
 /**
  * Secondary full-screen page frame ported from DSH Go's AppPage in page_frame.dart.
  *
- * Isolates pointer hit-testing and TalkBack traversal from any underlying route,
- * records scroll content into a GPU [rememberGraphicsLayer] so floating Chrome buttons
- * refract real pixels on Android 12+, and feathers both top and bottom system-bar zones.
+ * Includes built-in Android predictive-back gesture handling, TalkBack & pointer isolation,
+ * live GPU [rememberGraphicsLayer] capture for Chrome blur, and feathered system-bar veils.
  */
 @Composable
 fun AppPage(
     title: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    subtitle: String? = null,
     hero: (@Composable () -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
     content: LazyListScope.() -> Unit
@@ -87,6 +82,17 @@ fun AppPage(
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val barHeight = 56.dp
     val topReserved = statusTop + barHeight
+
+    var backProgress by remember { mutableFloatStateOf(0f) }
+    PredictiveBackHandler { progress ->
+        try {
+            progress.collect { event -> backProgress = event.progress }
+            backProgress = 0f
+            onBack()
+        } catch (_: CancellationException) {
+            backProgress = 0f
+        }
+    }
 
     val defaultHeaderPx = with(density) { 72.dp.toPx() }
     var headerHeightPx by remember { mutableFloatStateOf(defaultHeaderPx) }
@@ -120,8 +126,16 @@ fun AppPage(
     DshBackdrop(
         modifier = modifier
             .fillMaxSize()
+            .graphicsLayer {
+                if (!reduced && backProgress > 0f) {
+                    translationX = 40.dp.toPx() * backProgress
+                    val s = 1f - 0.05f * backProgress
+                    scaleX = s
+                    scaleY = s
+                    alpha = 1f - 0.18f * backProgress
+                }
+            }
             .semantics { isTraversalGroup = true }
-            // Absorb non-interactive background taps so overlays never leak touches underneath.
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
@@ -181,14 +195,6 @@ fun AppPage(
                                     color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.semantics { heading() }
                                 )
-                                if (!subtitle.isNullOrBlank()) {
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(
-                                        text = subtitle,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
                             }
                         }
                     }
@@ -227,7 +233,7 @@ fun AppPage(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     GlassIconButton(
-                        icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                        icon = DshIcons.ArrowBack,
                         contentDescription = "Back",
                         onClick = onBack
                     )
@@ -278,7 +284,6 @@ fun PageHero(
     stats: List<Pair<String, String>> = emptyList()
 ) {
     val dsh = ClassRecorderTheme.dshColors
-    val surfaces = ClassRecorderTheme.surfaces
     val scheme = MaterialTheme.colorScheme
 
     Column(
@@ -324,21 +329,7 @@ fun PageHero(
             ) {
                 tags.forEach { rawTag ->
                     val label = if (rawTag.startsWith("#")) rawTag else "#$rawTag"
-                    Box(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(
-                                if (surfaces.darkTheme) scheme.onSurface.copy(alpha = 0.09f)
-                                else scheme.onSurface.copy(alpha = 0.06f)
-                            )
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = scheme.onSurfaceVariant
-                        )
-                    }
+                    QuietTagPill(text = label)
                 }
             }
         }
@@ -364,7 +355,7 @@ fun PageHero(
 private val NumberThenUnitRegex = Regex("""^([0-9][0-9.,:]*)(\s*)([^0-9\s.,:+\-].*)$""")
 
 @Composable
-fun HeroStat(
+private fun HeroStat(
     value: String,
     label: String,
     modifier: Modifier = Modifier
@@ -423,39 +414,5 @@ fun HeroStat(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-    }
-}
-
-/**
- * Sentence-case group label above a card or day section, ported from DSH Go's PageSectionLabel.
- */
-@Composable
-fun PageSectionLabel(
-    text: String,
-    modifier: Modifier = Modifier,
-    trailingText: String? = null
-) {
-    val dsh = ClassRecorderTheme.dshColors
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 24.dp, top = 16.dp, end = 24.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge,
-            color = dsh.textTertiary,
-            modifier = Modifier
-                .weight(1f)
-                .semantics { heading() }
-        )
-        if (!trailingText.isNullOrBlank()) {
-            Text(
-                text = trailingText,
-                style = MaterialTheme.typography.bodySmall.tabular(),
-                color = dsh.textTertiary
-            )
-        }
     }
 }

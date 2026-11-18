@@ -26,9 +26,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -53,7 +50,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,10 +65,6 @@ data class PillSegment<T>(
 
 /**
  * Capsule segmented control ported from DSH Go's segmented_pill.dart.
- *
- * Equal-width segments inside a stadium track with a sliding capsule thumb.
- * Supports continuous [fractionalIndex] tracking (e.g. HorizontalPager swipe)
- * as well as direct tap and finger drag.
  */
 @Composable
 fun <T> SegmentedPill(
@@ -81,8 +73,7 @@ fun <T> SegmentedPill(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
     chromeGlass: Boolean = false,
-    fractionalIndex: Float? = null,
-    height: Dp = 44.dp
+    fractionalIndex: Float? = null
 ) {
     if (segments.isEmpty()) return
     val surfaces = ClassRecorderTheme.surfaces
@@ -103,10 +94,9 @@ fun <T> SegmentedPill(
     val effectiveIndex = (dragFraction ?: animatedIndex).coerceIn(0f, (segments.size - 1).toFloat())
     val activeSlot = effectiveIndex.roundToInt().coerceIn(0, segments.lastIndex)
 
-    // Grow height automatically at large system font scales so labels never clip.
     val scaledMinHeight = with(density) {
         val textPx = 13.5.sp.toPx() * 1.35f
-        maxOf(height, textPx.toDp() + 18.dp, 48.dp)
+        maxOf(48.dp, textPx.toDp() + 18.dp)
     }
 
     val inset = 3.dp
@@ -279,7 +269,6 @@ fun <T> SegmentedPill(
 
 /**
  * Quiet filter capsule ported from DSH Go's capsule_chip.dart.
- * Selected state uses ink fill (onSurface bg + surface text) rather than brand flood.
  */
 @Composable
 fun CapsuleChoiceChip(
@@ -287,7 +276,6 @@ fun CapsuleChoiceChip(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    dotColor: Color? = null,
     courseKey: String? = null
 ) {
     val surfaces = ClassRecorderTheme.surfaces
@@ -296,12 +284,8 @@ fun CapsuleChoiceChip(
     val scheme = MaterialTheme.colorScheme
     val isDark = surfaces.darkTheme
 
-    val resolvedDot = when {
-        courseKey != null -> dsh.courseDot(
-            key = courseKey,
-            onDarkSurface = if (selected) !isDark else isDark
-        )
-        else -> dotColor
+    val resolvedDot = courseKey?.let {
+        dsh.courseDot(key = it, onDarkSurface = if (selected) !isDark else isDark)
     }
 
     val bg by animateColorAsState(
@@ -386,7 +370,7 @@ fun SearchCapsule(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = Icons.Rounded.Search,
+            imageVector = DshIcons.Search,
             contentDescription = null,
             modifier = Modifier.size(20.dp),
             tint = dsh.textTertiary
@@ -431,7 +415,7 @@ fun SearchCapsule(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.Close,
+                    imageVector = DshIcons.Close,
                     contentDescription = "Clear search",
                     modifier = Modifier.size(18.dp),
                     tint = dsh.textTertiary

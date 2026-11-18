@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use chrono::NaiveDateTime;
@@ -25,6 +26,8 @@ pub struct RecordingRecord {
 
 pub struct Storage {
     conn: Mutex<Connection>,
+    schedule_cache: Mutex<Option<Option<UnifiedSchedule>>>,
+    data_version: AtomicU64,
 }
 
 impl Storage {
@@ -35,10 +38,16 @@ impl Storage {
         }
         let conn = Connection::open(db_path)
             .map_err(|e| format!("Failed to open sqlite db: {e}"))?;
+        let _ = conn.execute_batch(
+            "PRAGMA journal_mode = WAL;
+             PRAGMA synchronous = NORMAL;
+             PRAGMA busy_timeout = 5000;",
+        );
         Self::from_conn(conn)
     }
 
-    pub fn open_in_memory() -> Result<Self, String> {
+    #[cfg(test)]
+    pub(crate) fn open_in_memory() -> Result<Self, String> {
         let conn = Connection::open_in_memory()
             .map_err(|e| format!("Failed to open in-memory sqlite db: {e}"))?;
         Self::from_conn(conn)
@@ -66,6 +75,10 @@ impl Storage {
                 notes TEXT NOT NULL DEFAULT '',
                 tags TEXT NOT NULL DEFAULT '[]'
             );
+            CREATE INDEX IF NOT EXISTS idx_recordings_started_at
+                ON recordings(started_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_recordings_course_started
+                ON recordings(course_name, started_at DESC);
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
@@ -76,65 +89,94 @@ impl Storage {
 
         Ok(Self {
             conn: Mutex::new(conn),
+            schedule_cache: Mutex::new(None),
+            data_version: AtomicU64::new(1),
         })
+    }
+
+    pub fn data_version(&self) -> u64 {
+        self.data_version.load(Ordering::Acquire)
+    }
+
+    fn bump_version(&self) {
+        self.data_version.fetch_add(1, Ordering::Release);
     }
 
     pub fn save_schedule(&self, schedule: &UnifiedSchedule) -> Result<(), String> {
         let json_data = serde_json::to_string(schedule)
             .map_err(|e| format!("Failed to serialize schedule: {e}"))?;
-        let conn = self.conn.lock().map_err(|_| "Storage lock poisoned")?;
-        conn.execute(
-            "INSERT INTO schedules (id, source_url, json_data, synced_at)
-             VALUES (1, ?1, ?2, ?3)
-             ON CONFLICT(id) DO UPDATE SET
-               source_url = excluded.source_url,
-               json_data = excluded.json_data,
-               synced_at = excluded.synced_at",
-            params![schedule.source_url, json_data, schedule.synced_at],
-        )
-        .map_err(|e| format!("Failed to save schedule: {e}"))?;
+        {
+            let conn = self.conn.lock().map_err(|_| "Storage lock poisoned")?;
+            conn.execute(
+                "INSERT INTO schedules (id, source_url, json_data, synced_at)
+                 VALUES (1, ?1, ?2, ?3)
+                 ON CONFLICT(id) DO UPDATE SET
+                   source_url = excluded.source_url,
+                   json_data = excluded.json_data,
+                   synced_at = excluded.synced_at",
+                params![schedule.source_url, json_data, schedule.synced_at],
+            )
+            .map_err(|e| format!("Failed to save schedule: {e}"))?;
+        }
+        if let Ok(mut cache) = self.schedule_cache.lock() {
+            *cache = Some(Some(schedule.clone()));
+        }
+        self.bump_version();
         Ok(())
     }
 
     pub fn load_schedule(&self) -> Result<Option<UnifiedSchedule>, String> {
-        let conn = self.conn.lock().map_err(|_| "Storage lock poisoned")?;
-        let raw: Option<String> = conn
-            .query_row("SELECT json_data FROM schedules WHERE id = 1", [], |row| {
-                row.get(0)
-            })
-            .optional()
-            .map_err(|e| format!("Failed to load schedule: {e}"))?;
-        match raw {
-            Some(s) => {
-                let sched = serde_json::from_str(&s)
-                    .map_err(|e| format!("Failed to parse stored schedule: {e}"))?;
-                Ok(Some(sched))
+        if let Ok(cache) = self.schedule_cache.lock() {
+            if let Some(ref cached) = *cache {
+                return Ok(cached.clone());
             }
-            None => Ok(None),
         }
+        let parsed = {
+            let conn = self.conn.lock().map_err(|_| "Storage lock poisoned")?;
+            let raw: Option<String> = conn
+                .query_row("SELECT json_data FROM schedules WHERE id = 1", [], |row| {
+                    row.get(0)
+                })
+                .optional()
+                .map_err(|e| format!("Failed to load schedule: {e}"))?;
+            match raw {
+                Some(s) => Some(
+                    serde_json::from_str::<UnifiedSchedule>(&s)
+                        .map_err(|e| format!("Failed to parse stored schedule: {e}"))?,
+                ),
+                None => None,
+            }
+        };
+        if let Ok(mut cache) = self.schedule_cache.lock() {
+            *cache = Some(parsed.clone());
+        }
+        Ok(parsed)
     }
 
     pub fn insert_recording(&self, rec: &RecordingRecord) -> Result<(), String> {
         let tags_json = serde_json::to_string(&rec.tags).unwrap_or_else(|_| "[]".to_string());
-        let conn = self.conn.lock().map_err(|_| "Storage lock poisoned")?;
-        conn.execute(
-            "INSERT INTO recordings (id, file_path, course_name, teacher, room, slot, started_at, duration_ms, status, notes, tags)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-            params![
-                rec.id,
-                rec.file_path,
-                rec.course_name,
-                rec.teacher,
-                rec.room,
-                rec.slot,
-                rec.started_at,
-                rec.duration_ms,
-                rec.status,
-                rec.notes,
-                tags_json
-            ],
-        )
-        .map_err(|e| format!("Failed to insert recording: {e}"))?;
+        {
+            let conn = self.conn.lock().map_err(|_| "Storage lock poisoned")?;
+            conn.execute(
+                "INSERT INTO recordings (id, file_path, course_name, teacher, room, slot, started_at, duration_ms, status, notes, tags)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                params![
+                    rec.id,
+                    rec.file_path,
+                    rec.course_name,
+                    rec.teacher,
+                    rec.room,
+                    rec.slot,
+                    rec.started_at,
+                    rec.duration_ms,
+                    rec.status,
+                    rec.notes,
+                    tags_json
+                ],
+            )
+            .map_err(|e| format!("Failed to insert recording: {e}"))?;
+        }
+        self.bump_version();
         Ok(())
     }
 
@@ -151,6 +193,7 @@ impl Storage {
                 return Err(format!("Recording not found: {id}"));
             }
         }
+        self.bump_version();
         self.get_recording(id)?
             .ok_or_else(|| format!("Recording not found after update: {id}"))
     }
@@ -174,35 +217,23 @@ impl Storage {
     ) -> Result<Vec<RecordingRecord>, String> {
         let conn = self.conn.lock().map_err(|_| "Storage lock poisoned")?;
         let limit_i64 = limit.max(1) as i64;
-        let mut results = Vec::new();
         if let Some(course) = course_filter.map(str::trim).filter(|s| !s.is_empty()) {
             let mut stmt = conn
-                .prepare(
+                .prepare_cached(
                     "SELECT id, file_path, course_name, teacher, room, slot, started_at, duration_ms, status, notes, tags
                      FROM recordings WHERE course_name = ?1 ORDER BY started_at DESC LIMIT ?2",
                 )
                 .map_err(|e| format!("Failed to prepare query: {e}"))?;
-            let rows = stmt
-                .query_map(params![course, limit_i64], row_to_recording)
-                .map_err(|e| format!("Failed to list recordings: {e}"))?;
-            for r in rows {
-                results.push(r.map_err(|e| format!("Row read error: {e}"))?);
-            }
+            collect_recording_rows(stmt.query_map(params![course, limit_i64], row_to_recording))
         } else {
             let mut stmt = conn
-                .prepare(
+                .prepare_cached(
                     "SELECT id, file_path, course_name, teacher, room, slot, started_at, duration_ms, status, notes, tags
                      FROM recordings ORDER BY started_at DESC LIMIT ?1",
                 )
                 .map_err(|e| format!("Failed to prepare query: {e}"))?;
-            let rows = stmt
-                .query_map(params![limit_i64], row_to_recording)
-                .map_err(|e| format!("Failed to list recordings: {e}"))?;
-            for r in rows {
-                results.push(r.map_err(|e| format!("Row read error: {e}"))?);
-            }
+            collect_recording_rows(stmt.query_map(params![limit_i64], row_to_recording))
         }
-        Ok(results)
     }
 
     pub fn update_recording_notes(
@@ -226,6 +257,7 @@ impl Storage {
             )
             .map_err(|e| format!("Failed to update notes: {e}"))?;
         }
+        self.bump_version();
         self.get_recording(id)?
             .ok_or_else(|| format!("Recording not found: {id}"))
     }
@@ -235,9 +267,12 @@ impl Storage {
         if let Some(rec) = existing {
             let _ = std::fs::remove_file(&rec.file_path);
         }
-        let conn = self.conn.lock().map_err(|_| "Storage lock poisoned")?;
-        conn.execute("DELETE FROM recordings WHERE id = ?1", params![id])
-            .map_err(|e| format!("Failed to delete recording: {e}"))?;
+        {
+            let conn = self.conn.lock().map_err(|_| "Storage lock poisoned")?;
+            conn.execute("DELETE FROM recordings WHERE id = ?1", params![id])
+                .map_err(|e| format!("Failed to delete recording: {e}"))?;
+        }
+        self.bump_version();
         Ok(())
     }
 
@@ -253,13 +288,16 @@ impl Storage {
     }
 
     pub fn set_setting(&self, key: &str, value: &str) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|_| "Storage lock poisoned")?;
-        conn.execute(
-            "INSERT INTO settings (key, value) VALUES (?1, ?2)
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            params![key, value],
-        )
-        .map_err(|e| format!("Failed to set setting: {e}"))?;
+        {
+            let conn = self.conn.lock().map_err(|_| "Storage lock poisoned")?;
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?1, ?2)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                params![key, value],
+            )
+            .map_err(|e| format!("Failed to set setting: {e}"))?;
+        }
+        self.bump_version();
         Ok(())
     }
 
@@ -274,6 +312,15 @@ impl Storage {
             .map_err(|e| format!("Failed to count recordings: {e}"))?;
         Ok(count.max(0) as usize)
     }
+}
+
+fn collect_recording_rows(
+    rows: rusqlite::Result<rusqlite::MappedRows<'_, impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<RecordingRecord>>>,
+) -> Result<Vec<RecordingRecord>, String> {
+    let mapped = rows.map_err(|e| format!("Failed to list recordings: {e}"))?;
+    mapped
+        .map(|r| r.map_err(|e| format!("Row read error: {e}")))
+        .collect()
 }
 
 fn row_to_recording(row: &rusqlite::Row<'_>) -> rusqlite::Result<RecordingRecord> {
@@ -313,8 +360,7 @@ pub fn sanitize_segment(s: &str) -> String {
     }
 }
 
-/// Builds `<base_dir>/<CourseName>/<YYYY-MM-DD_HHmm>_<CourseName>_<Room>.m4a`
-/// or `<base_dir>/Uncategorized/<YYYY-MM-DD_HHmm>_Recording.m4a`.
+#[cfg(test)]
 pub fn build_recording_path(
     base_dir: &Path,
     course: Option<&CurrentClassMatch>,
@@ -337,8 +383,7 @@ pub fn format_date_with_pattern(dt: NaiveDateTime, date_format: Option<&str>) ->
     }
 }
 
-/// Builds a recording path using an optional custom filename template such as
-/// `{class} {date} - {lesson number}`.
+#[cfg(test)]
 pub fn build_recording_path_with_template(
     base_dir: &Path,
     course: Option<&CurrentClassMatch>,
@@ -408,7 +453,7 @@ pub fn build_recording_path_with_options(
             out = out.replace(key, &lesson_str);
         }
         let cleaned = sanitize_segment(&out);
-        if cleaned.is_empty() || cleaned == "Uncategorized" && class_name != "Uncategorized" {
+        if cleaned.is_empty() || (cleaned == "Uncategorized" && class_name != "Uncategorized") {
             format!("{date_str}_{time_str}_{folder}")
         } else {
             cleaned
@@ -511,6 +556,7 @@ mod tests {
     #[test]
     fn test_sqlite_recording_lifecycle_and_notes() {
         let storage = Storage::open_in_memory().unwrap();
+        let v0 = storage.data_version();
         let rec = RecordingRecord {
             id: "rec-1".to_string(),
             file_path: "/tmp/nonexistent.m4a".to_string(),
@@ -525,6 +571,7 @@ mod tests {
             tags: vec![],
         };
         storage.insert_recording(&rec).unwrap();
+        assert!(storage.data_version() > v0);
         let completed = storage.complete_recording("rec-1", 12000).unwrap();
         assert_eq!(completed.status, "completed");
         assert_eq!(completed.duration_ms, 12000);

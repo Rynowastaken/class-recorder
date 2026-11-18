@@ -33,18 +33,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Checklist
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.FolderZip
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Hub
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.RadioButtonUnchecked
-import androidx.compose.material.icons.rounded.SearchOff
-import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -66,7 +54,6 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -78,8 +65,10 @@ import com.ryno.classrecorder.core.RecordingRecord
 import com.ryno.classrecorder.ui.MainUiState
 import com.ryno.classrecorder.ui.components.AppSheet
 import com.ryno.classrecorder.ui.components.BackdropVeil
+import com.ryno.classrecorder.ui.components.BindScrollUnderVeil
 import com.ryno.classrecorder.ui.components.CapsuleChoiceChip
 import com.ryno.classrecorder.ui.components.DshConfirmSheet
+import com.ryno.classrecorder.ui.components.DshIcons
 import com.ryno.classrecorder.ui.components.DshPrimaryButton
 import com.ryno.classrecorder.ui.components.DshSecondaryButton
 import com.ryno.classrecorder.ui.components.EmptyView
@@ -89,6 +78,7 @@ import com.ryno.classrecorder.ui.components.ListCardDivider
 import com.ryno.classrecorder.ui.components.ListPageCard
 import com.ryno.classrecorder.ui.components.ListPageRow
 import com.ryno.classrecorder.ui.components.LocalBackdropLayer
+import com.ryno.classrecorder.ui.components.QuietTagPill
 import com.ryno.classrecorder.ui.components.SearchCapsule
 import com.ryno.classrecorder.ui.components.SettingsIcon
 import com.ryno.classrecorder.ui.components.SheetGroup
@@ -104,17 +94,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 /**
- * Recordings library screen rebuilt in DSH Go's Mist Glass language:
- * - Borderless SearchCapsule + compact circle GlassIconButtons (Select, .zip, MCP)
- * - Quiet ink-selected CapsuleChoiceChip course filters
- * - Day-grouped ListPageCards with inline preview playback & long-press multi-select
- * - Floating Chrome-tier SelectionDock and AppSheet mass export
+ * Recordings library screen rebuilt in DSH Go's Mist Glass language.
  */
 @Composable
 fun LibraryScreen(
@@ -128,10 +113,8 @@ fun LibraryScreen(
     onScrolledUnderChange: (Float) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
-    val dsh = ClassRecorderTheme.dshColors
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val listState = rememberLazyListState()
 
@@ -151,8 +134,12 @@ fun LibraryScreen(
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     fun stopInlinePlayer() {
-        runCatching { mediaPlayer?.stop() }
-        runCatching { mediaPlayer?.release() }
+        runCatching {
+            mediaPlayer?.let { mp ->
+                if (mp.isPlaying) mp.stop()
+                mp.release()
+            }
+        }
         mediaPlayer = null
         playingId = null
     }
@@ -172,19 +159,7 @@ fun LibraryScreen(
         selectedIds = emptySet()
     }
 
-    val scrollFraction by remember {
-        derivedStateOf {
-            val px = if (listState.firstVisibleItemIndex > 0) {
-                1000f
-            } else {
-                listState.firstVisibleItemScrollOffset.toFloat()
-            }
-            (px / with(density) { 24.dp.toPx() }).coerceIn(0f, 1f)
-        }
-    }
-    LaunchedEffect(scrollFraction) {
-        onScrolledUnderChange(scrollFraction)
-    }
+    BindScrollUnderVeil(listState = listState, onScrolledUnderChange = onScrolledUnderChange)
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip")
@@ -248,36 +223,44 @@ fun LibraryScreen(
             return
         }
         stopInlinePlayer()
-        val f = File(rec.filePath)
-        if (!f.exists()) {
-            onShowMessage("Audio file not found on disk")
-            return
-        }
-        runCatching {
-            val mp = MediaPlayer().apply {
-                setDataSource(f.absolutePath)
-                prepare()
-                setOnCompletionListener {
-                    playingId = null
-                    runCatching { release() }
-                    mediaPlayer = null
-                }
-                start()
+        scope.launch {
+            val exists = withContext(Dispatchers.IO) { File(rec.filePath).exists() }
+            if (!exists) {
+                onShowMessage("Audio file not found on disk")
+                return@launch
             }
-            mediaPlayer = mp
-            playingId = rec.id
-        }.onFailure {
-            stopInlinePlayer()
-            onShowMessage("Unable to play recording")
+            runCatching {
+                val mp = MediaPlayer().apply {
+                    setDataSource(rec.filePath)
+                    setOnPreparedListener { it.start() }
+                    setOnCompletionListener {
+                        playingId = null
+                        runCatching { release() }
+                        mediaPlayer = null
+                    }
+                    setOnErrorListener { _, _, _ ->
+                        stopInlinePlayer()
+                        onShowMessage("Unable to play recording")
+                        true
+                    }
+                    prepareAsync()
+                }
+                mediaPlayer = mp
+                playingId = rec.id
+            }.onFailure {
+                stopInlinePlayer()
+                onShowMessage("Unable to play recording")
+            }
         }
     }
 
-    val bottomDockHeight = if (selectionMode && selectedIds.isNotEmpty()) navBottom + 96.dp else navBottom + 44.dp
+    val showSelectionDock = selectionMode && selectedIds.isNotEmpty()
+    val bottomDockHeight = if (showSelectionDock) navBottom + 96.dp else navBottom + 44.dp
     val reduced = ClassRecorderTheme.reducedMotion
     val contentBackdropLayer = rememberGraphicsLayer()
     val canScrollDown by remember { derivedStateOf { listState.canScrollForward } }
     val bottomVeilAlpha by animateFloatAsState(
-        targetValue = if (selectionMode && selectedIds.isNotEmpty()) 0.92f else if (canScrollDown) 0.94f else 0f,
+        targetValue = if (showSelectionDock) 0.92f else if (canScrollDown) 0.94f else 0f,
         animationSpec = DshMotion.quickTween(reduced),
         label = "libraryBottomVeil"
     )
@@ -289,12 +272,16 @@ fun LibraryScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .drawWithContent {
-                    contentBackdropLayer.record {
-                        this@drawWithContent.drawContent()
-                    }
-                    drawLayer(contentBackdropLayer)
-                },
+                .then(
+                    if (showSelectionDock) {
+                        Modifier.drawWithContent {
+                            contentBackdropLayer.record {
+                                this@drawWithContent.drawContent()
+                            }
+                            drawLayer(contentBackdropLayer)
+                        }
+                    } else Modifier
+                ),
             contentPadding = PaddingValues(
                 start = AppSpace.gutter + startInset,
                 end = AppSpace.gutter + endInset,
@@ -334,7 +321,7 @@ fun LibraryScreen(
                         )
                         if (ui.recordings.isNotEmpty()) {
                             GlassIconButton(
-                                icon = Icons.Rounded.Checklist,
+                                icon = DshIcons.Checklist,
                                 contentDescription = "Select recordings",
                                 onClick = {
                                     selectionMode = true
@@ -344,7 +331,7 @@ fun LibraryScreen(
                                 visualSize = 42.dp
                             )
                             GlassIconButton(
-                                icon = Icons.Rounded.FolderZip,
+                                icon = DshIcons.FolderZip,
                                 contentDescription = "Export recordings as ZIP",
                                 onClick = { showExportSheet = true },
                                 tier = GlassTier.Pill,
@@ -352,7 +339,7 @@ fun LibraryScreen(
                             )
                         }
                         GlassIconButton(
-                            icon = Icons.Rounded.Hub,
+                            icon = DshIcons.Hub,
                             contentDescription = "MCP server status",
                             onClick = { showMcpSheet = true },
                             tier = GlassTier.Pill,
@@ -398,7 +385,7 @@ fun LibraryScreen(
                     item(key = "empty_library") {
                         Spacer(Modifier.height(16.dp))
                         EmptyView(
-                            icon = Icons.Rounded.GraphicEq,
+                            icon = DshIcons.GraphicEq,
                             title = "No recordings yet",
                             message = "Captured lectures appear here grouped by day and tagged automatically from your schedule."
                         )
@@ -408,7 +395,7 @@ fun LibraryScreen(
                     item(key = "empty_filtered") {
                         Spacer(Modifier.height(12.dp))
                         EmptyView(
-                            icon = Icons.Rounded.SearchOff,
+                            icon = DshIcons.SearchOff,
                             title = "No matching recordings",
                             message = "Try a different search keyword or reset the course filter.",
                             actionLabel = "Clear filters",
@@ -466,13 +453,13 @@ fun LibraryScreen(
 
         BackdropVeil(
             fromTop = false,
-            solidHeight = if (selectionMode && selectedIds.isNotEmpty()) navBottom + 76.dp else navBottom + 10.dp,
+            solidHeight = if (showSelectionDock) navBottom + 76.dp else navBottom + 10.dp,
             feather = 18.dp,
             alpha = bottomVeilAlpha,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 
-        if (selectionMode && selectedIds.isNotEmpty()) {
+        if (showSelectionDock) {
             CompositionLocalProvider(LocalBackdropLayer provides contentBackdropLayer) {
                 SelectionDock(
                     selectedCount = selectedIds.size,
@@ -508,7 +495,7 @@ fun LibraryScreen(
             onExportCourse = { course ->
                 exportSelectedOnly = false
                 pendingExportCourse = course
-                exportLauncher.launch("${course}_recordings.zip")
+                exportLauncher.launch("${UiFormatters.sanitizePathSegment(course)}_recordings.zip")
             },
             onDismiss = { showExportSheet = false }
         )
@@ -556,7 +543,7 @@ private fun SelectionHeaderRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         GlassIconButton(
-            icon = Icons.Rounded.Close,
+            icon = DshIcons.Close,
             contentDescription = "Exit selection",
             onClick = onCancel,
             tier = GlassTier.Pill,
@@ -590,7 +577,6 @@ private fun RecordingLibraryRow(
 ) {
     val scheme = MaterialTheme.colorScheme
     val dsh = ClassRecorderTheme.dshColors
-    val surfaces = ClassRecorderTheme.surfaces
     val courseTitle = rec.courseName.ifBlank { "Uncategorized" }
     val (identityBg, identityFg) = dsh.identityPair(courseTitle)
 
@@ -625,7 +611,7 @@ private fun RecordingLibraryRow(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (isSelected) Icons.Rounded.Check else Icons.Rounded.RadioButtonUnchecked,
+                        imageVector = if (isSelected) DshIcons.Check else DshIcons.RadioButtonUnchecked,
                         contentDescription = null,
                         tint = if (isSelected) scheme.onPrimary else dsh.textTertiary,
                         modifier = Modifier.size(18.dp)
@@ -641,7 +627,7 @@ private fun RecordingLibraryRow(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.GraphicEq,
+                        imageVector = DshIcons.GraphicEq,
                         contentDescription = null,
                         tint = dsh.onDangerContainer,
                         modifier = Modifier.size(18.dp)
@@ -657,7 +643,7 @@ private fun RecordingLibraryRow(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.GraphicEq,
+                        imageVector = DshIcons.GraphicEq,
                         contentDescription = null,
                         tint = identityFg,
                         modifier = Modifier.size(18.dp)
@@ -685,22 +671,7 @@ private fun RecordingLibraryRow(
                 val firstTag = rec.tags.firstOrNull()
                 if (!firstTag.isNullOrBlank()) {
                     Spacer(Modifier.width(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(
-                                if (surfaces.darkTheme) scheme.onSurface.copy(alpha = 0.09f)
-                                else scheme.onSurface.copy(alpha = 0.06f)
-                            )
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = if (firstTag.startsWith("#")) firstTag else "#$firstTag",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = scheme.onSurfaceVariant,
-                            maxLines = 1
-                        )
-                    }
+                    QuietTagPill(text = if (firstTag.startsWith("#")) firstTag else "#$firstTag")
                 }
             }
 
@@ -738,7 +709,7 @@ private fun RecordingLibraryRow(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = if (isPlaying) Icons.Rounded.Stop else Icons.Rounded.PlayArrow,
+                    imageVector = if (isPlaying) DshIcons.Stop else DshIcons.PlayArrow,
                     contentDescription = if (isPlaying) "Stop preview" else "Preview audio",
                     tint = if (isPlaying) dsh.danger else scheme.onSurfaceVariant,
                     modifier = Modifier.size(22.dp)
@@ -769,14 +740,14 @@ private fun SelectionDock(
         ) {
             DshSecondaryButton(
                 label = if (isExporting) "Exporting…" else "Export (.zip)",
-                icon = Icons.Rounded.FolderZip,
+                icon = DshIcons.FolderZip,
                 enabled = !isExporting,
                 onClick = onExportSelected,
                 modifier = Modifier.weight(1f)
             )
             DshPrimaryButton(
                 label = "Delete ($selectedCount)",
-                icon = Icons.Rounded.DeleteOutline,
+                icon = DshIcons.DeleteOutline,
                 danger = true,
                 onClick = onDeleteSelected,
                 modifier = Modifier.weight(1f)
@@ -812,7 +783,7 @@ private fun ExportRecordingsSheet(
             )
             DshPrimaryButton(
                 label = if (isExporting) "Exporting…" else "Export all ($totalCount)",
-                icon = Icons.Rounded.FolderZip,
+                icon = DshIcons.FolderZip,
                 enabled = !isExporting && totalCount > 0,
                 onClick = onExportAll,
                 modifier = Modifier.fillMaxWidth()
@@ -829,7 +800,7 @@ private fun ExportRecordingsSheet(
                         meta = "$count ${if (count == 1) "file" else "files"}",
                         leading = {
                             SettingsIcon(
-                                icon = Icons.Rounded.FolderZip,
+                                icon = DshIcons.FolderZip,
                                 identityKey = course
                             )
                         },
@@ -868,20 +839,7 @@ private suspend fun exportRecordingsToZip(
                 zos.closeEntry()
                 exportedCount++
 
-                metaArr.put(
-                    JSONObject().apply {
-                        put("id", rec.id)
-                        put("archivePath", entryName)
-                        put("courseName", rec.courseName)
-                        put("teacher", rec.teacher)
-                        put("room", rec.room)
-                        put("slot", rec.slot)
-                        put("startedAt", rec.startedAt)
-                        put("durationMs", rec.durationMs)
-                        put("notes", rec.notes)
-                        put("tags", JSONArray(rec.tags))
-                    }
-                )
+                metaArr.put(rec.toJsonObject().put("archivePath", entryName))
             }
             zos.putNextEntry(ZipEntry("metadata.json"))
             zos.write(metaArr.toString(2).toByteArray(Charsets.UTF_8))

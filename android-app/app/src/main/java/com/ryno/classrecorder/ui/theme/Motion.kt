@@ -25,18 +25,15 @@ import androidx.compose.ui.platform.LocalContext
  * DSH Go motion tokens & live system Reduce Motion observer, ported from motion.dart.
  */
 object DshMotion {
-    const val PRESS_MS = 120
     const val QUICK_MS = 160
     const val STANDARD_MS = 240
     const val COLLAPSE_MS = 280
     const val EMPHASIZED_MS = 340
-    const val BREATH_MS = 2400
 
     const val PRESS_SCALE = 0.97f
 
     val StandardEasing: Easing = FastOutSlowInEasing
     val GlideEasing: Easing = CubicBezierEasing(0.32f, 0.72f, 0.0f, 1.0f)
-    val SheetRiseEasing: Easing = CubicBezierEasing(0.20f, 0.90f, 0.25f, 1.0f)
     val CollapseEasing: Easing = CubicBezierEasing(0.65f, 0.0f, 0.35f, 1.0f)
 
     fun <T> pressSpring(reduced: Boolean = false): FiniteAnimationSpec<T> =

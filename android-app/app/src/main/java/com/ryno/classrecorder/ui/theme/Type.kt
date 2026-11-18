@@ -11,10 +11,6 @@ import androidx.compose.ui.unit.sp
 
 /**
  * DSH Go typography scale, ported from dsh_typography.dart.
- *
- * Hierarchy uses two structural weights (400 Normal / 600 SemiBold) plus 300 Light
- * for large display numerals/timers so CJK and Latin pair cleanly across OEM fonts.
- * Every numeric/clock style enables tabular figures ("tnum").
  */
 private const val TABULAR_FIGURES = "tnum"
 
@@ -35,30 +31,23 @@ data class MonoTypography(
     val mono: TextStyle,
     val monoSmall: TextStyle,
     val timer: TextStyle,
-    val timerCompact: TextStyle,
     val seekLabel: TextStyle,
     val timerCaption: TextStyle
 )
 
+private val BaseMono12 = TextStyle(
+    fontFamily = MonoTypographyFamily,
+    fontWeight = FontWeight.Normal,
+    fontSize = 12.sp,
+    lineHeight = 18.sp,
+    fontFeatureSettings = TABULAR_FIGURES,
+    platformStyle = CleanPlatformText,
+    lineHeightStyle = EvenLineHeight
+)
+
 val DshMonoTypography = MonoTypography(
-    mono = TextStyle(
-        fontFamily = MonoTypographyFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 13.sp,
-        lineHeight = 20.sp,
-        fontFeatureSettings = TABULAR_FIGURES,
-        platformStyle = CleanPlatformText,
-        lineHeightStyle = EvenLineHeight
-    ),
-    monoSmall = TextStyle(
-        fontFamily = MonoTypographyFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 18.sp,
-        fontFeatureSettings = TABULAR_FIGURES,
-        platformStyle = CleanPlatformText,
-        lineHeightStyle = EvenLineHeight
-    ),
+    mono = BaseMono12.copy(fontSize = 13.sp, lineHeight = 20.sp),
+    monoSmall = BaseMono12,
     timer = TextStyle(
         fontFamily = SansFamily,
         fontWeight = FontWeight.Light,
@@ -69,24 +58,7 @@ val DshMonoTypography = MonoTypography(
         platformStyle = CleanPlatformText,
         lineHeightStyle = EvenLineHeight
     ),
-    timerCompact = TextStyle(
-        fontFamily = MonoTypographyFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 18.sp,
-        fontFeatureSettings = TABULAR_FIGURES,
-        platformStyle = CleanPlatformText,
-        lineHeightStyle = EvenLineHeight
-    ),
-    seekLabel = TextStyle(
-        fontFamily = MonoTypographyFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 18.sp,
-        fontFeatureSettings = TABULAR_FIGURES,
-        platformStyle = CleanPlatformText,
-        lineHeightStyle = EvenLineHeight
-    ),
+    seekLabel = BaseMono12,
     timerCaption = TextStyle(
         fontFamily = SansFamily,
         fontWeight = FontWeight.Normal,

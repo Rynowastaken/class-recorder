@@ -8,20 +8,18 @@ import kotlin.math.min
 /**
  * DSH Go accent palette presets + OKLCH contrast-guarded runtime derivation.
  *
- * Ported directly from DSH Go's accent.dart.
+ * Ported from DSH Go's accent.dart.
  */
 @Immutable
 data class AppAccent(
     val id: String,
     val label: String,
     val seed: Color,
-    val pressed: Color,
     val container: Color,
     val onContainer: Color,
     val bubble: Color,
     val glow: Color,
     val seedDark: Color,
-    val pressedDark: Color,
     val onSeedDark: Color,
     val containerDark: Color,
     val onContainerDark: Color,
@@ -39,7 +37,6 @@ data class AppAccent(
     companion object {
         const val WALLPAPER_ID = "wallpaper"
         const val MAX_CHROMA = 0.13
-        const val LIGHT_SEED_L = 0.53
         const val DARK_LIFT = 0.234
         const val MIN_ON_SURFACE = 3.0
         const val MIN_TEXT = 4.5
@@ -48,13 +45,11 @@ data class AppAccent(
             id = "mist",
             label = "Mist",
             seed = Color(0xFF4B67B4),
-            pressed = Color(0xFF3D569D),
             container = Color(0xFFDEE8FF),
             onContainer = Color(0xFF213262),
             bubble = Color(0xFFD9E4FD),
             glow = Color(0xFFABC3FC),
             seedDark = Color(0xFF97B1F0),
-            pressedDark = Color(0xFF859EDC),
             onSeedDark = Color(0xFF121C34),
             containerDark = Color(0xFF2E3C5F),
             onContainerDark = Color(0xFFD8E1F6),
@@ -70,13 +65,11 @@ data class AppAccent(
             id = "daiqing",
             label = "Daiqing",
             seed = Color(0xFF236185),
-            pressed = Color(0xFF145071),
             container = Color(0xFFDBEAF5),
             onContainer = Color(0xFF123950),
             bubble = Color(0xFFD6E7F3),
             glow = Color(0xFFA2CAE5),
             seedDark = Color(0xFF8CB9D7),
-            pressedDark = Color(0xFF79A6C4),
             onSeedDark = Color(0xFF0D1F2B),
             containerDark = Color(0xFF274152),
             onContainerDark = Color(0xFFD5E3ED),
@@ -92,13 +85,11 @@ data class AppAccent(
             id = "dusk",
             label = "Dusk",
             seed = Color(0xFF726291),
-            pressed = Color(0xFF61517D),
             container = Color(0xFFEAE5F4),
             onContainer = Color(0xFF392F4C),
             bubble = Color(0xFFE6E1F1),
             glow = Color(0xFFC8BDE1),
             seedDark = Color(0xFFB8ABD2),
-            pressedDark = Color(0xFFA598BF),
             onSeedDark = Color(0xFF1F1A29),
             containerDark = Color(0xFF40394F),
             onContainerDark = Color(0xFFE2DEEC),
@@ -114,13 +105,11 @@ data class AppAccent(
             id = "turquoise",
             label = "Turquoise",
             seed = Color(0xFF34766F),
-            pressed = Color(0xFF296760),
             container = Color(0xFFDBECE9),
             onContainer = Color(0xFF123D39),
             bubble = Color(0xFFD6E8E6),
             glow = Color(0xFFA3CEC8),
             seedDark = Color(0xFF8DBEB7),
-            pressedDark = Color(0xFF7BABA4),
             onSeedDark = Color(0xFF0D211F),
             containerDark = Color(0xFF274340),
             onContainerDark = Color(0xFFD6E5E2),
@@ -136,13 +125,11 @@ data class AppAccent(
             id = "amber",
             label = "Amber",
             seed = Color(0xFF8D6636),
-            pressed = Color(0xFF7A5528),
             container = Color(0xFFF2E6D9),
             onContainer = Color(0xFF483011),
             bubble = Color(0xFFEEE2D3),
             glow = Color(0xFFDCBE9D),
             seedDark = Color(0xFFCCAC87),
-            pressedDark = Color(0xFFB99975),
             onSeedDark = Color(0xFF271A0C),
             containerDark = Color(0xFF4C3A25),
             onContainerDark = Color(0xFFEADFD3),
@@ -158,13 +145,11 @@ data class AppAccent(
             id = "graphite",
             label = "Graphite",
             seed = Color(0xFF2C2E32),
-            pressed = Color(0xFF1D1F23),
             container = Color(0xFFE3E6EC),
             onContainer = Color(0xFF2C2E32),
             bubble = Color(0xFFE0E3E8),
             glow = Color(0xFFBBBEC3),
             seedDark = Color(0xFFE5E8ED),
-            pressedDark = Color(0xFFCED1D6),
             onSeedDark = Color(0xFF191B1E),
             containerDark = Color(0xFF3B3D41),
             onContainerDark = Color(0xFFDEE1E7),
@@ -218,20 +203,16 @@ data class AppAccent(
                 surface = neutrals.nightHighest,
                 onAccent = onSeedDark
             )
-            val sl = Oklch.fromColor(seed).l
-            val sdl = Oklch.fromColor(seedDark).l
             val hazeHue = (h + 33.0) % 360.0
             return AppAccent(
                 id = id,
                 label = label,
                 seed = seed,
-                pressed = tone(sl - 0.06, 0.95),
                 container = tone(0.93, 0.26),
                 onContainer = tone(0.33, 0.70),
                 bubble = tone(0.918, 0.29),
                 glow = tone(0.819, 0.68),
                 seedDark = seedDark,
-                pressedDark = tone(sdl - 0.06, 0.76),
                 onSeedDark = onSeedDark,
                 containerDark = tone(0.361, 0.51),
                 onContainerDark = tone(0.909, 0.24),

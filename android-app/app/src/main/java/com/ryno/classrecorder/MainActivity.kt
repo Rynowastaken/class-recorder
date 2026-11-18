@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -29,8 +30,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -38,7 +37,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -56,11 +54,16 @@ import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ryno.classrecorder.core.RecordingRecord
 import com.ryno.classrecorder.ui.MainViewModel
 import com.ryno.classrecorder.ui.components.BackdropVeil
 import com.ryno.classrecorder.ui.components.DshBackdrop
+import com.ryno.classrecorder.ui.components.DshIcons
 import com.ryno.classrecorder.ui.components.GlassIconButton
 import com.ryno.classrecorder.ui.components.GlassSurface
 import com.ryno.classrecorder.ui.components.LocalBackdropLayer
@@ -78,6 +81,9 @@ import com.ryno.classrecorder.ui.theme.ClassRecorderTheme
 import com.ryno.classrecorder.ui.theme.DshMotion
 import com.ryno.classrecorder.ui.theme.GlassTier
 import com.ryno.classrecorder.ui.theme.StatusTone
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 private val ROOT_TABS = listOf(
@@ -92,7 +98,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val vm: MainViewModel = viewModel()
-            val ui by vm.ui.collectAsState()
+            val ui by vm.ui.collectAsStateWithLifecycle()
             ClassRecorderTheme(
                 themeMode = ui.themeMode,
                 accentId = ui.accentId
@@ -105,8 +111,24 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
-    val ui by vm.ui.collectAsState()
-    val recorder by vm.recorderState.collectAsState()
+    val ui by vm.ui.collectAsStateWithLifecycle()
+    // Observe ONLY the boolean recording flag at the root shell so 30 fps amplitude/timer
+    // updates never recompose HorizontalPager, SegmentedPill, or rootBackdropLayer.
+    val isRecording by remember(vm) {
+        vm.recorderState.map { it.isRecording }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = false)
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(vm, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            vm.refreshLanIp()
+            while (true) {
+                vm.refreshForegroundTick()
+                delay(4_000L)
+            }
+        }
+    }
+
     val context = LocalContext.current
     val reduced = ClassRecorderTheme.reducedMotion
     val snackbarHostState = remember { SnackbarHostState() }
@@ -127,7 +149,6 @@ fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
         if (playbackRecording != null) {
             lastPlaybackSnapshot = playbackRecording
         } else if (activePlaybackId != null) {
-            // Recording was deleted externally (e.g. via MCP): dismiss overlay cleanly
             activePlaybackId = null
         }
     }
@@ -188,7 +209,7 @@ fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
             ) {
                 HorizontalPager(
                     state = pagerState,
-                    beyondViewportPageCount = 2,
+                    beyondViewportPageCount = 1,
                     userScrollEnabled = !overlayOpen,
                     modifier = Modifier
                         .fillMaxSize()
@@ -202,22 +223,22 @@ fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
                     when (tab) {
                         0 -> RecordScreen(
                             ui = ui,
-                            recorder = recorder,
+                            recorderState = vm.recorderState,
                             hasMicPermission = hasMicPermission,
                             onRequestMicPermission = ::requestPermissions,
-                            onStartRecording = { vm.startRecording() },
-                            onStopRecording = { vm.stopRecording() },
-                            onDiscardRecording = { vm.discardRecording() },
-                            onTogglePause = { vm.togglePause() },
-                            onSelectCourseOverride = { vm.selectCourseOverride(it) },
-                            onToggleMcp = { vm.toggleMcpServer() },
-                            onShowMessage = { vm.showMessage(it) },
+                            onStartRecording = vm::startRecording,
+                            onStopRecording = vm::stopRecording,
+                            onDiscardRecording = vm::discardRecording,
+                            onTogglePause = vm::togglePause,
+                            onSelectCourseOverride = vm::selectCourseOverride,
+                            onToggleMcp = vm::toggleMcpServer,
+                            onShowMessage = vm::showMessage,
                             topContentInset = topReserved,
                             onScrolledUnderChange = { pageScrollVeils[0] = it }
                         )
                         1 -> ScheduleScreen(
                             ui = ui,
-                            onSyncSchedule = { vm.syncSchedule(it) },
+                            onSyncSchedule = vm::syncSchedule,
                             onRecordCourse = { course, slot ->
                                 if (hasMicPermission) {
                                     vm.startRecordingForCourse(course, slot)
@@ -233,10 +254,10 @@ fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
                         )
                         else -> LibraryScreen(
                             ui = ui,
-                            isActiveTab = pagerState.currentPage == 2 && !overlayOpen && !recorder.isRecording,
-                            onToggleMcp = { vm.toggleMcpServer() },
-                            onDeleteRecording = { vm.deleteRecording(it) },
-                            onShowMessage = { vm.showMessage(it) },
+                            isActiveTab = pagerState.currentPage == 2 && !overlayOpen && !isRecording,
+                            onToggleMcp = vm::toggleMcpServer,
+                            onDeleteRecording = vm::deleteRecording,
+                            onShowMessage = vm::showMessage,
                             onOpenPlayback = { rec ->
                                 lastPlaybackSnapshot = rec
                                 activePlaybackId = rec.id
@@ -289,9 +310,12 @@ fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
                         Spacer(Modifier.width(8.dp))
 
                         GlassIconButton(
-                            icon = Icons.Rounded.Settings,
+                            icon = DshIcons.Settings,
                             contentDescription = "Settings",
-                            onClick = { showSettings = true },
+                            onClick = {
+                                vm.refreshLanIp()
+                                showSettings = true
+                            },
                             tier = GlassTier.Chrome,
                             badgeTone = if (ui.mcpStatus.running) StatusTone.Ok else null
                         )
@@ -299,58 +323,35 @@ fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
                 }
             }
 
-            // Full-screen Playback push overlay
-            AnimatedVisibility(
-                visible = playbackRecording != null,
-                enter = slideInHorizontally(
-                    animationSpec = DshMotion.glideTween(reduced),
-                    initialOffsetX = { full -> full / 5 }
-                ) + fadeIn(DshMotion.quickTween(reduced)),
-                exit = slideOutHorizontally(
-                    animationSpec = DshMotion.glideTween(reduced),
-                    targetOffsetX = { full -> full / 5 }
-                ) + fadeOut(DshMotion.quickTween(reduced))
-            ) {
+            PushScreenOverlay(visible = playbackRecording != null, reduced = reduced) {
                 val rec = playbackRecording ?: lastPlaybackSnapshot
                 if (rec != null) {
                     PlaybackScreen(
                         recording = rec,
                         onDismiss = { activePlaybackId = null },
-                        onUpdateNotes = { id, notes, tags -> vm.updateNotes(id, notes, tags) },
+                        onUpdateNotes = vm::updateNotes,
                         onDeleteRecording = { id ->
                             activePlaybackId = null
                             vm.deleteRecording(id)
                         },
-                        onShowMessage = { vm.showMessage(it) }
+                        onShowMessage = vm::showMessage
                     )
                 }
             }
 
-            // Full-screen Settings push overlay
-            AnimatedVisibility(
-                visible = showSettings,
-                enter = slideInHorizontally(
-                    animationSpec = DshMotion.glideTween(reduced),
-                    initialOffsetX = { full -> full / 5 }
-                ) + fadeIn(DshMotion.quickTween(reduced)),
-                exit = slideOutHorizontally(
-                    animationSpec = DshMotion.glideTween(reduced),
-                    targetOffsetX = { full -> full / 5 }
-                ) + fadeOut(DshMotion.quickTween(reduced))
-            ) {
+            PushScreenOverlay(visible = showSettings, reduced = reduced) {
                 SettingsScreen(
                     ui = ui,
                     onDismiss = { showSettings = false },
-                    onSelectThemeMode = { vm.setThemeMode(it) },
-                    onSelectAccentId = { vm.setAccentId(it) },
-                    onSaveFilenameTemplate = { tmpl, fmt -> vm.saveFilenameTemplate(tmpl, fmt) },
-                    onSyncSchedule = { vm.syncSchedule(it) },
-                    onToggleMcp = { vm.toggleMcpServer() },
-                    onShowMessage = { vm.showMessage(it) }
+                    onSelectThemeMode = vm::setThemeMode,
+                    onSelectAccentId = vm::setAccentId,
+                    onSaveFilenameTemplate = vm::saveFilenameTemplate,
+                    onSyncSchedule = vm::syncSchedule,
+                    onToggleMcp = vm::toggleMcpServer,
+                    onShowMessage = vm::showMessage
                 )
             }
 
-            // Topmost Chrome-tier Mist Glass snackbar host so status messages surface above Settings & Playback too
             SnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier
@@ -375,4 +376,24 @@ fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
             }
         }
     }
+}
+
+@Composable
+private fun PushScreenOverlay(
+    visible: Boolean,
+    reduced: Boolean,
+    content: @Composable AnimatedVisibilityScope.() -> Unit
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = slideInHorizontally(
+            animationSpec = DshMotion.glideTween(reduced),
+            initialOffsetX = { full -> full / 5 }
+        ) + fadeIn(DshMotion.quickTween(reduced)),
+        exit = slideOutHorizontally(
+            animationSpec = DshMotion.glideTween(reduced),
+            targetOffsetX = { full -> full / 5 }
+        ) + fadeOut(DshMotion.quickTween(reduced)),
+        content = content
+    )
 }

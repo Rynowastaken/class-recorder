@@ -5,11 +5,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -35,13 +33,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchColors
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
@@ -69,7 +65,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ryno.classrecorder.ui.theme.AppShape
-import com.ryno.classrecorder.ui.theme.AppSpace
 import com.ryno.classrecorder.ui.theme.ClassRecorderTheme
 import com.ryno.classrecorder.ui.theme.DshMotion
 import com.ryno.classrecorder.ui.theme.GlassTier
@@ -77,8 +72,51 @@ import com.ryno.classrecorder.ui.theme.StatusTone
 import com.ryno.classrecorder.ui.theme.tabular
 
 /**
- * Hub overview card ported from DSH Go's overview_card.dart:
- * 52dp leading glyph slot, 16dp inset, 14dp gap, optional hairline + 44dp/48dp footer strip.
+ * Shared DSH Go switch palette used across settings tiles and overview cards.
+ */
+@Composable
+fun dshSwitchColors(): SwitchColors {
+    val scheme = MaterialTheme.colorScheme
+    return SwitchDefaults.colors(
+        checkedThumbColor = scheme.onPrimary,
+        checkedTrackColor = scheme.primary,
+        uncheckedThumbColor = scheme.onSurfaceVariant,
+        uncheckedTrackColor = scheme.surfaceContainerHighest,
+        uncheckedBorderColor = scheme.outlineVariant
+    )
+}
+
+/**
+ * Translucent stadium mini-pill used for `#tags`, slot codes, and metadata badges.
+ */
+@Composable
+fun QuietTagPill(
+    text: String,
+    modifier: Modifier = Modifier,
+    tabularFigures: Boolean = false
+) {
+    val surfaces = ClassRecorderTheme.surfaces
+    val scheme = MaterialTheme.colorScheme
+    val baseStyle = MaterialTheme.typography.labelMedium
+    Box(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(
+                scheme.onSurface.copy(alpha = if (surfaces.darkTheme) 0.085f else 0.06f)
+            )
+            .padding(horizontal = 9.dp, vertical = 3.dp)
+    ) {
+        Text(
+            text = text,
+            style = if (tabularFigures) baseStyle.tabular() else baseStyle,
+            color = scheme.onSurfaceVariant,
+            maxLines = 1
+        )
+    }
+}
+
+/**
+ * Hub overview card ported from DSH Go's overview_card.dart.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -226,8 +264,7 @@ fun OverviewCard(
 @Composable
 fun RowScope.OverviewFooterRow(
     tone: StatusTone,
-    text: String,
-    leading: (@Composable () -> Unit)? = null
+    text: String
 ) {
     val reduced = ClassRecorderTheme.reducedMotion
     Box(
@@ -236,11 +273,7 @@ fun RowScope.OverviewFooterRow(
             .padding(start = 16.dp),
         contentAlignment = Alignment.Center
     ) {
-        if (leading != null) {
-            leading()
-        } else {
-            StatusDot(tone = tone, size = 8.dp)
-        }
+        StatusDot(tone = tone, size = 8.dp)
     }
     Spacer(Modifier.width(14.dp))
     AnimatedContent(
@@ -269,8 +302,7 @@ fun OverviewGlyph(
     icon: ImageVector,
     identityKey: String = "",
     modifier: Modifier = Modifier,
-    tintSlot: Int? = null,
-    size: Dp = 52.dp
+    tintSlot: Int? = null
 ) {
     val dsh = ClassRecorderTheme.dshColors
     val (bg, fg) = if (tintSlot != null) {
@@ -280,7 +312,7 @@ fun OverviewGlyph(
     }
     Box(
         modifier = modifier
-            .size(size)
+            .size(52.dp)
             .clip(CircleShape)
             .background(bg),
         contentAlignment = Alignment.Center
@@ -288,7 +320,7 @@ fun OverviewGlyph(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(size * 0.46f),
+            modifier = Modifier.size(24.dp),
             tint = fg
         )
     }
@@ -303,8 +335,7 @@ fun SettingsIcon(
     modifier: Modifier = Modifier,
     tintSlot: Int = 0,
     identityKey: String? = null,
-    danger: Boolean = false,
-    size: Dp = 32.dp
+    danger: Boolean = false
 ) {
     val dsh = ClassRecorderTheme.dshColors
     val (bg, fg) = when {
@@ -314,7 +345,7 @@ fun SettingsIcon(
     }
     Box(
         modifier = modifier
-            .size(size)
+            .size(32.dp)
             .clip(CircleShape)
             .background(bg),
         contentAlignment = Alignment.Center
@@ -329,9 +360,9 @@ fun SettingsIcon(
 }
 
 @Composable
-fun OverviewChevron(modifier: Modifier = Modifier) {
+private fun OverviewChevron(modifier: Modifier = Modifier) {
     Icon(
-        imageVector = Icons.Rounded.ChevronRight,
+        imageVector = DshIcons.ChevronRight,
         contentDescription = null,
         modifier = modifier
             .size(20.dp)
@@ -341,10 +372,7 @@ fun OverviewChevron(modifier: Modifier = Modifier) {
 }
 
 /**
- * Card-tier glass group for settings sections and day-grouped rows, ported from
- * DSH Go's ListPageCard and SettingsSection.
- *
- * Section titles use quiet sentence-case `labelLarge` in `textTertiary`.
+ * Card-tier glass group for settings sections and day-grouped rows.
  */
 @Composable
 fun ListPageCard(
@@ -416,10 +444,8 @@ fun ListCardDivider(startIndent: Dp = 16.dp) {
 }
 
 /**
- * Shared row anatomy ported from DSH Go's ListPageRow / SettingsTile:
- * 52dp min height single-line, 64dp min height two-line, >= 48dp touch target.
+ * Shared row anatomy ported from DSH Go's ListPageRow / SettingsTile.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ListPageRow(
     title: String,
@@ -427,36 +453,23 @@ fun ListPageRow(
     subtitle: String? = null,
     icon: ImageVector? = null,
     leading: (@Composable () -> Unit)? = null,
-    leadingWidth: Dp = 32.dp,
-    badge: (@Composable () -> Unit)? = null,
-    value: String? = null,
     meta: String? = null,
     trailing: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
-    onLongClick: (() -> Unit)? = null,
-    showChevron: Boolean = onClick != null && trailing == null,
-    danger: Boolean = false
+    showChevron: Boolean = onClick != null && trailing == null
 ) {
     val scheme = MaterialTheme.colorScheme
     val dsh = ClassRecorderTheme.dshColors
-    val hasSubtitle = !subtitle.isNullOrBlank()
-    val minHeight = if (hasSubtitle) 64.dp else 52.dp
+    val minHeight = if (!subtitle.isNullOrBlank()) 64.dp else 52.dp
     val interactionSource = remember { MutableInteractionSource() }
 
-    val clickMod = when {
-        onLongClick != null -> Modifier.combinedClickable(
-            interactionSource = interactionSource,
-            indication = ripple(),
-            onClick = { onClick?.invoke() },
-            onLongClick = onLongClick
-        )
-        onClick != null -> Modifier.clickable(
+    val clickMod = if (onClick != null) {
+        Modifier.clickable(
             interactionSource = interactionSource,
             indication = ripple(),
             onClick = onClick
         )
-        else -> Modifier
-    }
+    } else Modifier
 
     Row(
         modifier = modifier
@@ -473,7 +486,7 @@ fun ListPageRow(
     ) {
         if (leading != null || icon != null) {
             Box(
-                modifier = Modifier.width(leadingWidth),
+                modifier = Modifier.width(32.dp),
                 contentAlignment = Alignment.Center
             ) {
                 if (leading != null) {
@@ -483,7 +496,7 @@ fun ListPageRow(
                         imageVector = icon,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp),
-                        tint = if (danger) dsh.danger else scheme.onSurfaceVariant
+                        tint = scheme.onSurfaceVariant
                     )
                 }
             }
@@ -491,24 +504,17 @@ fun ListPageRow(
         }
 
         Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = 15.sp,
-                        lineHeight = 21.sp,
-                        fontWeight = FontWeight.Normal
-                    ),
-                    color = if (danger) dsh.danger else scheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                if (badge != null) {
-                    Spacer(Modifier.width(8.dp))
-                    badge()
-                }
-            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = 15.sp,
+                    lineHeight = 21.sp,
+                    fontWeight = FontWeight.Normal
+                ),
+                color = scheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
             if (!subtitle.isNullOrBlank()) {
                 Spacer(Modifier.height(2.dp))
                 Text(
@@ -521,17 +527,6 @@ fun ListPageRow(
             }
         }
 
-        if (!value.isNullOrBlank()) {
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodyMedium.tabular(),
-                color = scheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.End
-            )
-        }
         if (!meta.isNullOrBlank()) {
             Spacer(Modifier.width(12.dp))
             Text(
@@ -562,12 +557,9 @@ fun SettingsSwitchTile(
     onCheckedChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
-    icon: ImageVector? = null,
-    leading: (@Composable () -> Unit)? = null,
-    tintSlot: Int = 0
+    leading: (@Composable () -> Unit)? = null
 ) {
     val haptics = LocalHapticFeedback.current
-    val scheme = MaterialTheme.colorScheme
     val toggleModifier = if (onCheckedChange != null) {
         modifier.toggleable(
             value = checked,
@@ -583,30 +575,21 @@ fun SettingsSwitchTile(
         title = title,
         subtitle = subtitle,
         modifier = toggleModifier,
-        leading = leading ?: icon?.let {
-            { SettingsIcon(icon = it, tintSlot = tintSlot) }
-        },
+        leading = leading,
         onClick = null,
         showChevron = false,
         trailing = {
             Switch(
                 checked = checked,
                 onCheckedChange = null,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = scheme.onPrimary,
-                    checkedTrackColor = scheme.primary,
-                    uncheckedThumbColor = scheme.onSurfaceVariant,
-                    uncheckedTrackColor = scheme.surfaceContainerHighest,
-                    uncheckedBorderColor = scheme.outlineVariant
-                )
+                colors = dshSwitchColors()
             )
         }
     )
 }
 
 /**
- * Recessed monospace well for MCP URLs, ADB commands, and generated filenames,
- * using DSH Go's codeWellBg / codeWellBorder tokens.
+ * Recessed monospace well for MCP URLs, ADB commands, and generated filenames.
  */
 @Composable
 fun CodeWell(
@@ -670,7 +653,7 @@ fun CodeWell(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.ContentCopy,
+                        imageVector = DshIcons.ContentCopy,
                         contentDescription = "Copy",
                         modifier = Modifier.size(16.dp),
                         tint = dsh.textTertiary
@@ -776,8 +759,7 @@ fun DshTextField(
 }
 
 /**
- * Centered empty / not-yet state ported from DSH Go's empty_view.dart:
- * circular Card-glass badge, sentence-case title, concise subtitle, and at most one action.
+ * Centered empty / not-yet state ported from DSH Go's empty_view.dart.
  */
 @Composable
 fun EmptyView(

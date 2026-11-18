@@ -1,16 +1,21 @@
 package com.ryno.classrecorder.core
 
+import androidx.annotation.Keep
+
+@Keep
 interface RecordingBridge {
     fun startRecordingFromAgent(courseJson: String): String
     fun stopRecordingFromAgent(): String
 }
 
+@Keep
 object RustCore {
     init {
         System.loadLibrary("class_recorder_core")
     }
 
     external fun initCore(filesDir: String, recordingsDir: String, bridge: RecordingBridge): String
+    external fun getDataVersion(): Long
     external fun syncSchedule(sourceUrl: String): String
     external fun getScheduleJson(): String
     external fun getCurrentClassJson(): String

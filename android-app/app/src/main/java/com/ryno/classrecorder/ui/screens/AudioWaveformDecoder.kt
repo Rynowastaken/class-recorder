@@ -3,9 +3,11 @@ package com.ryno.classrecorder.ui.screens
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.util.LruCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
 import kotlin.math.max
@@ -13,12 +15,12 @@ import kotlin.math.sqrt
 
 /**
  * Decodes real PCM amplitude peak buckets from an `.m4a` / audio file on disk
- * using Android's [MediaExtractor] + [MediaCodec] off the main thread.
- *
- * For long lectures (> 30s), seeks across evenly spaced sync windows so even
- * 60-minute recordings produce an accurate waveform overview in ~120ms.
+ * using Android's [MediaExtractor] + [MediaCodec] off the main thread, with an
+ * in-memory [LruCache] so reopening recent recordings renders in 0 ms.
  */
 object AudioWaveformDecoder {
+
+    private val peakCache = object : LruCache<String, List<Float>>(24) {}
 
     suspend fun extractPeaks(
         filePath: String,
@@ -26,11 +28,17 @@ object AudioWaveformDecoder {
     ): List<Float> = withContext(Dispatchers.Default) {
         if (bucketCount <= 0) return@withContext emptyList()
         val file = File(filePath)
-        if (!file.exists() || file.length() <= 0L) return@withContext emptyList()
+        val length = file.length()
+        if (!file.exists() || length <= 0L) return@withContext emptyList()
+
+        val cacheKey = "${file.absolutePath}:${file.lastModified()}:$length:$bucketCount"
+        synchronized(peakCache) {
+            peakCache.get(cacheKey)?.let { return@withContext it }
+        }
 
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
-        try {
+        val decoded = try {
             extractor.setDataSource(file.absolutePath)
             var audioTrack = -1
             var format: MediaFormat? = null
@@ -60,7 +68,7 @@ object AudioWaveformDecoder {
 
             val buckets = FloatArray(bucketCount)
             val info = MediaCodec.BufferInfo()
-            val useWindowSeek = durationUs > 30_000_000L // > 30s
+            val useWindowSeek = durationUs > 30_000_000L
 
             if (useWindowSeek) {
                 for (b in 0 until bucketCount) {
@@ -100,7 +108,7 @@ object AudioWaveformDecoder {
                                     .toInt()
                                     .coerceIn(0, bucketCount - 1)
                             } else {
-                                (safetyLoops % bucketCount)
+                                safetyLoops % bucketCount
                             }
                             buckets[bucket] = max(buckets[bucket], peak)
                         }
@@ -114,12 +122,10 @@ object AudioWaveformDecoder {
 
             val maxPeak = buckets.maxOrNull() ?: 0f
             if (maxPeak <= 0.002f) {
-                // Real near-silent audio file: keep flat low floor rather than inventing waves
                 List(bucketCount) { 0.08f }
             } else {
                 val normScale = 1f / maxPeak.coerceAtLeast(0.05f)
                 buckets.map { raw ->
-                    // Perceptual sqrt compression so quiet syllables stay legible alongside loud peaks
                     sqrt((raw * normScale).coerceIn(0f, 1f))
                 }
             }
@@ -130,6 +136,13 @@ object AudioWaveformDecoder {
             runCatching { codec?.release() }
             runCatching { extractor.release() }
         }
+
+        if (decoded.isNotEmpty()) {
+            synchronized(peakCache) {
+                peakCache.put(cacheKey, decoded)
+            }
+        }
+        decoded
     }
 
     private fun decodeWindowPeak(
@@ -171,7 +184,7 @@ object AudioWaveformDecoder {
         return peak
     }
 
-    private fun measurePcm16Peak(buffer: java.nio.ByteBuffer, offset: Int, size: Int): Float {
+    private fun measurePcm16Peak(buffer: ByteBuffer, offset: Int, size: Int): Float {
         val dup = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
         val end = (offset + size).coerceAtMost(dup.limit())
         dup.position(offset.coerceIn(0, end))

@@ -231,7 +231,8 @@ pub fn parse_schedule_json(raw: &str, source_url: &str) -> Result<UnifiedSchedul
 }
 
 fn parse_time_range(range: &str) -> Option<(NaiveTime, NaiveTime)> {
-    let normalized = range.replace('～', "~").replace('-', "~");
+    let normalized = range
+        .replace(['～', '-', '–', '—'], "~");
     let mut parts = normalized.split('~');
     let start_str = parts.next()?.trim();
     let end_str = parts.next()?.trim();
@@ -305,11 +306,14 @@ pub fn match_current_class(
 }
 
 pub async fn fetch_schedule(source_input: &str) -> Result<UnifiedSchedule, String> {
+    static HTTP_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
     let resolved = resolve_schedule_source_url(source_input)?;
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .map_err(|e| format!("HTTP client error: {e}"))?;
+    let client = HTTP_CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .expect("reqwest TLS client init")
+    });
 
     let resp = client
         .get(&resolved)

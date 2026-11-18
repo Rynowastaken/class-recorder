@@ -17,7 +17,7 @@
 ## Quick Start
 
 ### 1. Install the App
-1. Install the Class Recorder `.apk` on your Android phone (**Android 10+**).
+1. Download the latest `ClassRecorder-v*-arm64-v8a.apk` from the [**Releases**](https://github.com/Rynowastaken/class-recorder/releases) page and install it on your Android phone (**Android 10+**, 64-bit ARM).
 2. Open the app and allow **Microphone** access (and **Notifications** so you can see and control recordings while the screen is off).
 
 ### 2. Import Your Class Schedule
@@ -99,12 +99,12 @@ Once connected, your assistant can look up your timetable, check what class is h
 cargo test --manifest-path rust-core/Cargo.toml
 ./scripts/build-rust-android.sh
 
-# 2. Run Android JVM unit tests & assemble debug APK
+# 2. Run Android JVM unit tests & assemble optimized release APK
 cd android-app
-./gradlew :app:testClassrecorderTestDebugUnitTest :app:assembleClassrecorderDebug
+./gradlew :app:testClassrecorderTestDebugUnitTest :app:assembleClassrecorderRelease
 ```
 
-The APK will be generated at `android-app/app/build/outputs/apk/classrecorder/debug/app-classrecorder-debug.apk`.  
+The shrunk release APK will be generated at `android-app/app/build/outputs/apk/classrecorder/release/app-classrecorder-release.apk`.  
 *(A side-by-side `classrecorderTest` flavor with isolated app ID `com.ryno.classrecorder.uitest` is also available via `:app:assembleClassrecorderTestDebug` so UI testing never touches your real recordings.)*
 
 </details>

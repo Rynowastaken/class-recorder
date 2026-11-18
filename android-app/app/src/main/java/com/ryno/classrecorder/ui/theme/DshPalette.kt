@@ -7,74 +7,70 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 
 /**
- * Handcrafted Mist Glass palette & hue-shifted NeutralTones.
- *
- * Ported directly from DSH Go's dsh_palette.dart. Material's fromSeed is
- * deliberately bypassed so surfaces keep DSH Go's low-saturation mist/slate
- * calm and surfaceTint stays Transparent.
+ * Handcrafted Mist Glass palette & hue-shifted NeutralTones, ported from dsh_palette.dart.
  */
 object DshPalette {
     // -- Light: Morning Mist --
-    val MistTop = Color(0xFFEBF1FE)
-    val MistBottom = Color(0xFFF6F7FC)
-    val Mist = Color(0xFFF0F4FD)
-    val MistLowest = Color(0xFFFBFCFF)
-    val MistLow = Color(0xFFF6F9FE)
-    val MistContainer = Color(0xFFEEF1F9)
-    val MistHigh = Color(0xFFE7EBF4)
-    val MistHighest = Color(0xFFDFE4EE)
+    internal val MistTop = Color(0xFFEBF1FE)
+    internal val MistBottom = Color(0xFFF6F7FC)
+    internal val Mist = Color(0xFFF0F4FD)
+    internal val MistLowest = Color(0xFFFBFCFF)
+    internal val MistLow = Color(0xFFF6F9FE)
+    internal val MistContainer = Color(0xFFEEF1F9)
+    internal val MistHigh = Color(0xFFE7EBF4)
+    internal val MistHighest = Color(0xFFDFE4EE)
 
-    val Ink = Color(0xFF1E232E)
-    val InkMuted = Color(0xFF4F5562)
-    val InkFaint = Color(0xFF646974)
-    val InkGhost = Color(0xFFA1A5AC)
-    val OutlineLight = Color(0xFF7E838D)
-    val RuleLight = Color(0xFFDCE0E8)
-    val ShadowInk = Color(0xFF0B152D)
+    internal val Ink = Color(0xFF1E232E)
+    internal val InkMuted = Color(0xFF4F5562)
+    internal val InkFaint = Color(0xFF646974)
+    internal val InkGhost = Color(0xFFA1A5AC)
+    internal val OutlineLight = Color(0xFF7E838D)
+    internal val RuleLight = Color(0xFFDCE0E8)
+    internal val ShadowInk = Color(0xFF0B152D)
 
     // -- Dark: Slate Night --
-    val NightTop = Color(0xFF1D222C)
-    val NightBottom = Color(0xFF1B1C23)
-    val Night = Color(0xFF1C1F28)
-    val NightLowest = Color(0xFF14171E)
-    val NightLow = Color(0xFF232730)
-    val NightContainer = Color(0xFF272C36)
-    val NightHigh = Color(0xFF2D323C)
-    val NightHighest = Color(0xFF343944)
+    internal val NightTop = Color(0xFF1D222C)
+    internal val NightBottom = Color(0xFF1B1C23)
+    internal val Night = Color(0xFF1C1F28)
+    internal val NightLowest = Color(0xFF14171E)
+    internal val NightLow = Color(0xFF232730)
+    internal val NightContainer = Color(0xFF272C36)
+    internal val NightHigh = Color(0xFF2D323C)
+    internal val NightHighest = Color(0xFF343944)
 
-    val Paper = Color(0xFFE6E9F0)
-    val PaperMuted = Color(0xFFB6BBC5)
-    val PaperFaint = Color(0xFF9A9EA9)
-    val PaperGhost = Color(0xFF656971)
-    val OutlineDark = Color(0xFF737781)
-    val RuleDark = Color(0xFF343841)
-    val ShadowNight = Color(0xFF03060D)
+    internal val Paper = Color(0xFFE6E9F0)
+    internal val PaperMuted = Color(0xFFB6BBC5)
+    internal val PaperFaint = Color(0xFF9A9EA9)
+    internal val PaperGhost = Color(0xFF656971)
+    internal val OutlineDark = Color(0xFF737781)
+    internal val RuleDark = Color(0xFF343841)
+    internal val ShadowNight = Color(0xFF03060D)
 
     // -- Shared Semantic Neutrals & Roles --
-    val Slate = Color(0xFF545E6F)
-    val SlateContainer = Color(0xFFE2E6F0)
-    val SlateLift = Color(0xFFB3BED2)
-    val OnSlateLift = Color(0xFF1A2230)
-    val SlateContainerDark = Color(0x17FFFFFF)
+    internal val Slate = Color(0xFF545E6F)
+    internal val SlateContainer = Color(0xFFE2E6F0)
+    internal val SlateLift = Color(0xFFB3BED2)
+    internal val OnSlateLift = Color(0xFF1A2230)
+    private val SlateContainerDark = Color(0x17FFFFFF)
 
-    val Dusk = Color(0xFF6B578F)
-    val DuskContainer = Color(0xFFECE5FB)
-    val OnDuskContainer = Color(0xFF3B2C54)
-    val DuskLift = Color(0xFFBEAEDE)
-    val OnDuskLift = Color(0xFF251C36)
-    val DuskContainerDark = Color(0xFF3E3451)
-    val OnDuskContainerDark = Color(0xFFE4DDF3)
+    private val Dusk = Color(0xFF6B578F)
+    private val DuskContainer = Color(0xFFECE5FB)
+    private val OnDuskContainer = Color(0xFF3B2C54)
+    private val DuskLift = Color(0xFFBEAEDE)
+    private val OnDuskLift = Color(0xFF251C36)
+    private val DuskContainerDark = Color(0xFF3E3451)
+    private val OnDuskContainerDark = Color(0xFFE4DDF3)
 
-    val Danger = Color(0xFFA54743)
-    val OnDanger = Color(0xFFFDF9F8)
-    val DangerContainer = Color(0xFFFFE2E0)
-    val OnDangerContainer = Color(0xFF642724)
-    val DangerLift = Color(0xFFE69089)
-    val OnDangerLift = Color(0xFF331513)
-    val DangerContainerDark = Color(0xFF542C29)
-    val OnDangerContainerDark = Color(0xFFF8D9D7)
+    private val Danger = Color(0xFFA54743)
+    private val OnDanger = Color(0xFFFDF9F8)
+    private val DangerContainer = Color(0xFFFFE2E0)
+    private val OnDangerContainer = Color(0xFF642724)
+    private val DangerLift = Color(0xFFE69089)
+    private val OnDangerLift = Color(0xFF331513)
+    private val DangerContainerDark = Color(0xFF542C29)
+    private val OnDangerContainerDark = Color(0xFFF8D9D7)
 
-    val Scrim = Color(0xFF0B111F)
+    internal val Scrim = Color(0xFF0B111F)
 
     fun lightScheme(accent: AppAccent): ColorScheme {
         val n = NeutralTones.forAccent(accent)
@@ -186,7 +182,6 @@ data class NeutralTones(
     val codeWell: Color,
     val codeWellHeader: Color,
     val codeWellBorder: Color,
-    val lineNumber: Color,
     val nightTop: Color,
     val nightBottom: Color,
     val night: Color,
@@ -208,8 +203,7 @@ data class NeutralTones(
     val sheetDark: Color,
     val codeWellDark: Color,
     val codeWellHeaderDark: Color,
-    val codeWellBorderDark: Color,
-    val lineNumberDark: Color
+    val codeWellBorderDark: Color
 ) {
     companion object {
         const val BASE_HUE = 266.0
@@ -238,7 +232,6 @@ data class NeutralTones(
             codeWell = Color(0xFFEDF0F6),
             codeWellHeader = Color(0xFFE7EBF3),
             codeWellBorder = Color(0xFFDBDEE5),
-            lineNumber = Color(0xFF7D8088),
             nightTop = DshPalette.NightTop,
             nightBottom = DshPalette.NightBottom,
             night = DshPalette.Night,
@@ -260,8 +253,7 @@ data class NeutralTones(
             sheetDark = Color(0xFF232832),
             codeWellDark = Color(0xFF14171E),
             codeWellHeaderDark = Color(0xFF1A1E26),
-            codeWellBorderDark = Color(0xFF2F333A),
-            lineNumberDark = Color(0xFF71747D)
+            codeWellBorderDark = Color(0xFF2F333A)
         )
 
         private val cache = HashMap<Pair<Double, Double>, NeutralTones>()
@@ -302,7 +294,6 @@ data class NeutralTones(
                     codeWell = t(m.codeWell),
                     codeWellHeader = t(m.codeWellHeader),
                     codeWellBorder = t(m.codeWellBorder),
-                    lineNumber = t(m.lineNumber),
                     nightTop = t(m.nightTop),
                     nightBottom = t(m.nightBottom),
                     night = t(m.night),
@@ -324,8 +315,7 @@ data class NeutralTones(
                     sheetDark = t(m.sheetDark),
                     codeWellDark = t(m.codeWellDark),
                     codeWellHeaderDark = t(m.codeWellHeaderDark),
-                    codeWellBorderDark = t(m.codeWellBorderDark),
-                    lineNumberDark = t(m.lineNumberDark)
+                    codeWellBorderDark = t(m.codeWellBorderDark)
                 ).also { cache[key] = it }
             }
         }

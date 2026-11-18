@@ -28,14 +28,17 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
- * Real-time microphone level waveform rendered inside the Mist Glass Record stage.
+ * Real-time microphone level waveform rendered from a zero-allocation [ringBuffer].
  *
- * Uses contrast-bearing [idleColor] (`textTertiary`, >= 3:1 against Card glass)
- * so resting and paused ticks remain clearly legible in both Light and Dark themes.
+ * [frameTick] is read inside the draw scope so Compose invalidates ONLY the draw phase
+ * at 30 fps without recomposing parent layouts.
  */
 @Composable
 fun LiveWaveformCanvas(
-    amplitudes: List<Float>,
+    ringBuffer: FloatArray,
+    writeCursor: Int,
+    sampleCount: Int,
+    frameTick: Int,
     active: Boolean,
     paused: Boolean,
     modifier: Modifier = Modifier,
@@ -43,19 +46,21 @@ fun LiveWaveformCanvas(
     idleColor: Color = ClassRecorderTheme.dshColors.textTertiary,
     playheadColor: Color = ClassRecorderTheme.dshColors.danger
 ) {
+    val a11yLabel = when {
+        !active -> "Audio waveform idle"
+        paused -> "Audio waveform paused"
+        else -> "Live audio waveform"
+    }
     Canvas(
         modifier = modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = 96.dp)
-            .semantics {
-                contentDescription = when {
-                    !active -> "Audio waveform idle"
-                    paused -> "Audio waveform paused"
-                    else -> "Live audio waveform"
-                }
-            }
+            .semantics { contentDescription = a11yLabel }
     ) {
-        if (size.width <= 0f || size.height <= 0f) return@Canvas
+        // Read frameTick inside DrawScope so updates only invalidate draw, never composition/layout
+        val unusedTick = frameTick
+        if (unusedTick < 0 || size.width <= 0f || size.height <= 0f) return@Canvas
+
         val barWidth = 3.dp.toPx()
         val gap = 3.dp.toPx()
         val stride = barWidth + gap
@@ -67,24 +72,23 @@ fun LiveWaveformCanvas(
 
         val totalWidth = slotCount * stride - gap
         val startX = ((size.width - totalWidth) * 0.5f).coerceAtLeast(0f)
+        val cap = ringBuffer.size
 
         for (i in 0 until slotCount) {
-            val sampleIdx = amplitudes.size - slotCount + i
-            val sample = if (sampleIdx in amplitudes.indices) {
-                amplitudes[sampleIdx].coerceIn(0f, 1f)
+            val offsetFromNewest = slotCount - 1 - i
+            val hasSample = active && offsetFromNewest < sampleCount && cap > 0
+            val sample = if (hasSample) {
+                val ringIdx = ((writeCursor - 1 - offsetFromNewest) % cap + cap) % cap
+                ringBuffer[ringIdx].coerceIn(0f, 1f)
             } else {
                 0f
             }
-            val height = if (!active) {
-                minBarH
-            } else {
-                max(minBarH, sample * maxBarH)
-            }
+            val height = if (!active) minBarH else max(minBarH, sample * maxBarH)
             val recency = (i + 1).toFloat() / slotCount.toFloat()
             val barColor = when {
                 !active -> idleColor.copy(alpha = 0.78f)
                 paused -> activeColor.copy(alpha = 0.55f + 0.30f * recency)
-                sampleIdx < 0 -> idleColor.copy(alpha = 0.68f)
+                !hasSample -> idleColor.copy(alpha = 0.68f)
                 else -> activeColor.copy(alpha = 0.62f + 0.38f * recency)
             }
             val x = startX + i * stride
@@ -110,11 +114,7 @@ fun LiveWaveformCanvas(
 }
 
 /**
- * Interactive scrubbable playback waveform canvas parameterized by [playedColor],
- * [unplayedColor] (`textTertiary` >= 3:1), and [playheadColor].
- *
- * Renders real decoded audio [peaks]; when [peaks] is empty (decoding in progress or
- * silent/unavailable file), draws an honest uniform baseline with zero synthetic waves.
+ * Interactive scrubbable playback waveform canvas.
  */
 @Composable
 fun ScrubWaveformCanvas(
@@ -130,13 +130,15 @@ fun ScrubWaveformCanvas(
     var dragging by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableFloatStateOf(progress) }
     val displayProgress = (if (dragging) dragFraction else progress).coerceIn(0f, 1f)
+    // Quantize accessibility announcements to 5% buckets so playback doesn't spam AccessibilityManager at 31 fps
+    val quantizedPercent = ((displayProgress * 20f).roundToInt() * 5).coerceIn(0, 100)
 
     Canvas(
         modifier = modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = 64.dp)
             .semantics {
-                contentDescription = "Playback position ${(displayProgress * 100).roundToInt()} percent"
+                contentDescription = "Playback position $quantizedPercent percent"
                 setProgress { target ->
                     val clamped = target.coerceIn(0f, 1f)
                     onScrub(clamped)
@@ -177,6 +179,7 @@ fun ScrubWaveformCanvas(
                     },
                     onDragCancel = {
                         dragging = false
+                        onScrubFinished?.invoke()
                     }
                 )
             }

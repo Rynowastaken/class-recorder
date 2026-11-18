@@ -3,33 +3,7 @@ package com.ryno.classrecorder.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Hub
-import androidx.compose.material.icons.rounded.Terminal
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import com.ryno.classrecorder.ui.MainUiState
-import com.ryno.classrecorder.ui.components.AppSheet
-import com.ryno.classrecorder.ui.components.CodeWell
-import com.ryno.classrecorder.ui.components.ListCardDivider
-import com.ryno.classrecorder.ui.components.ListPageRow
-import com.ryno.classrecorder.ui.components.OverviewCard
-import com.ryno.classrecorder.ui.components.OverviewFooterRow
-import com.ryno.classrecorder.ui.components.OverviewGlyph
-import com.ryno.classrecorder.ui.components.SheetGroup
-import com.ryno.classrecorder.ui.theme.AppSpace
-import com.ryno.classrecorder.ui.theme.StatusTone
+import com.ryno.classrecorder.core.AppDefaults
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -38,7 +12,7 @@ import java.util.Locale
 
 object UiFormatters {
     private val SAMPLE_PREVIEW_DATE: LocalDate = LocalDate.of(2026, 11, 18)
-    private val TIME_RANGE_SPLITTER = Regex("""\s*(?:~|–|—|-)\s*""")
+    private val TIME_RANGE_SPLITTER = Regex("""\s*(?:~|～|–|—|-)\s*""")
     private val CLOCK_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
     private val TIMESTAMP_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.US)
     private val DAY_HEADER_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE · MMM d", Locale.US)
@@ -59,7 +33,7 @@ object UiFormatters {
     }
 
     /**
-     * Normalizes timetable range strings (`08:10~09:00`, `13:25 - 14:15`) to a clean en-dash (`08:10–09:00`).
+     * Normalizes timetable range strings (`08:10~09:00`, `13:25 - 14:15`) to an en-dash (`08:10–09:00`).
      */
     fun formatTimeRange(raw: String): String {
         val trimmed = raw.trim()
@@ -117,24 +91,33 @@ object UiFormatters {
     }
 
     /**
-     * Sanitizes `/` and `\` in [courseName] and disambiguates colliding archive entry paths
-     * (`_2`, `_3`, ...) so `ZipOutputStream` never throws `ZipException: duplicate entry`.
+     * Sanitizes filesystem-unsafe characters identically to Rust's `sanitize_segment`.
+     */
+    fun sanitizePathSegment(raw: String, fallback: String = "Uncategorized"): String {
+        val cleaned = buildString(raw.length) {
+            for (c in raw.trim()) {
+                when {
+                    c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' ||
+                        c == '"' || c == '<' || c == '>' || c == '|' || c == '\u0000' ||
+                        c.isISOControl() -> append('_')
+                    else -> append(c)
+                }
+            }
+        }.trim('.').trim()
+        return cleaned.ifEmpty { fallback }
+    }
+
+    /**
+     * Disambiguates colliding archive entry paths (`_2`, `_3`, ...) so `ZipOutputStream`
+     * never throws `ZipException: duplicate entry`.
      */
     fun buildUniqueZipEntryPath(
         courseName: String,
         fileName: String,
         usedEntries: MutableSet<String>
     ): String {
-        val safeFolder = courseName.trim()
-            .ifBlank { "Uncategorized" }
-            .replace('/', '_')
-            .replace('\\', '_')
-            .trim('.')
-            .ifBlank { "Uncategorized" }
-        val safeFile = fileName.trim()
-            .replace('/', '_')
-            .replace('\\', '_')
-            .ifBlank { "recording.m4a" }
+        val safeFolder = sanitizePathSegment(courseName, "Uncategorized")
+        val safeFile = sanitizePathSegment(fileName, "recording.m4a")
 
         val dotIdx = safeFile.lastIndexOf('.')
         val stem = if (dotIdx > 0) safeFile.substring(0, dotIdx) else safeFile
@@ -153,13 +136,6 @@ object UiFormatters {
      * Deterministically previews `.m4a` filenames against `2026-11-18`, supporting all
      * RustCore template placeholders (including `{lesson number}` and `{lession number}`).
      */
-    fun sanitizePathSegment(raw: String, fallback: String = "Uncategorized"): String =
-        raw.trim()
-            .replace('/', '_')
-            .replace('\\', '_')
-            .trim('.')
-            .ifBlank { fallback }
-
     fun previewFilename(
         template: String,
         dateFormat: String,
@@ -171,131 +147,38 @@ object UiFormatters {
         val safeCourse = sanitizePathSegment(courseName, "Uncategorized")
         val safeRoom = sanitizePathSegment(room, "Room")
         val safeTeacher = sanitizePathSegment(teacher, "Instructor")
-        val effectiveTemplate = template.trim().ifEmpty { "{date}_{time}_{class}_{room}" }
-        val formattedDate = formatPreviewDate(SAMPLE_PREVIEW_DATE, dateFormat.trim().ifEmpty { "yyyy-MM-dd" })
-        val stem = effectiveTemplate
+        val effectiveTemplate = template.trim().ifEmpty { AppDefaults.FILENAME_TEMPLATE }
+        val formattedDate = formatPreviewDate(
+            SAMPLE_PREVIEW_DATE,
+            dateFormat.trim().ifEmpty { AppDefaults.DATE_FORMAT }
+        )
+        val rawStem = effectiveTemplate
             .replace("{class}", safeCourse)
             .replace("{course}", safeCourse)
             .replace("{date}", formattedDate)
             .replace("{lesson number}", "1")
+            .replace("{lesson_number}", "1")
             .replace("{lession number}", "1")
+            .replace("{lession_number}", "1")
             .replace("{lesson}", "1")
+            .replace("{lession}", "1")
             .replace("{room}", safeRoom)
             .replace("{teacher}", safeTeacher)
             .replace("{time}", "1015")
             .replace("{slot}", slot)
-            .replace('/', '_')
-            .replace('\\', '_')
-            .trim()
+        val stem = sanitizePathSegment(rawStem, "${formattedDate}_1015_$safeCourse")
         return if (stem.endsWith(".m4a", ignoreCase = true)) stem else "$stem.m4a"
     }
 
-    private fun formatPreviewDate(date: LocalDate, pattern: String): String {
-        return runCatching {
+    private fun formatPreviewDate(date: LocalDate, pattern: String): String =
+        runCatching {
             DateTimeFormatter.ofPattern(pattern, Locale.US).format(date)
         }.getOrElse {
             DateTimeFormatter.ISO_LOCAL_DATE.format(date)
         }
-    }
 
     fun copyToClipboard(context: Context, label: String, text: String) {
         val cm = context.getSystemService(ClipboardManager::class.java)
         cm?.setPrimaryClip(ClipData.newPlainText(label, text))
-    }
-}
-
-/** Package-level compatibility helpers for screen callers. */
-fun formatDuration(ms: Long): String = UiFormatters.formatDuration(ms)
-fun formatTimestamp(epoch: Long): String = UiFormatters.formatTimestamp(epoch)
-
-/**
- * Shared Mist Glass MCP Server inspector & toggle sheet used from Recorder and Recordings.
- */
-@Composable
-fun McpServerSheet(
-    ui: MainUiState,
-    onDismiss: () -> Unit,
-    onToggleMcp: () -> Unit,
-    onCopied: (String) -> Unit
-) {
-    val context = LocalContext.current
-    val scheme = MaterialTheme.colorScheme
-    val running = ui.mcpStatus.running
-    val port = ui.mcpStatus.port
-    val lanUrl = "http://${ui.lanIp}:$port/mcp"
-    val adbCmd = "adb forward tcp:$port tcp:$port"
-
-    AppSheet(
-        onDismiss = onDismiss,
-        title = "On-device MCP server"
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = AppSpace.sheetGutter),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            OverviewCard(
-                leading = {
-                    OverviewGlyph(
-                        icon = Icons.Rounded.Hub,
-                        tintSlot = 0
-                    )
-                },
-                title = if (running) "Server active" else "Server stopped",
-                subtitle = if (running) "Listening on port $port" else "Enable so local or LAN agents can connect",
-                trailing = {
-                    Switch(
-                        checked = running,
-                        onCheckedChange = { onToggleMcp() },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = scheme.onPrimary,
-                            checkedTrackColor = scheme.primary,
-                            uncheckedThumbColor = scheme.onSurfaceVariant,
-                            uncheckedTrackColor = scheme.surfaceContainerHighest,
-                            uncheckedBorderColor = scheme.outlineVariant
-                        )
-                    )
-                },
-                footer = {
-                    OverviewFooterRow(
-                        tone = if (running) StatusTone.Ok else StatusTone.Idle,
-                        text = if (running) lanUrl else "Port $port · JSON-RPC 2.0 over HTTP"
-                    )
-                }
-            )
-
-            CodeWell(
-                label = "LAN endpoint",
-                text = lanUrl,
-                onCopy = {
-                    UiFormatters.copyToClipboard(context, "MCP LAN URL", lanUrl)
-                    onCopied("Copied LAN endpoint")
-                }
-            )
-
-            CodeWell(
-                label = "USB / ADB tunnel",
-                text = adbCmd,
-                onCopy = {
-                    UiFormatters.copyToClipboard(context, "ADB forward command", adbCmd)
-                    onCopied("Copied ADB command")
-                }
-            )
-        }
-
-        if (ui.mcpStatus.recentCalls.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            SheetGroup(title = "Recent agent calls") {
-                val recent = ui.mcpStatus.recentCalls.takeLast(5).asReversed()
-                recent.forEachIndexed { idx, call ->
-                    if (idx > 0) ListCardDivider(startIndent = 60.dp)
-                    ListPageRow(
-                        title = call,
-                        icon = Icons.Rounded.Terminal
-                    )
-                }
-            }
-        }
     }
 }

@@ -7,10 +7,6 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Four-tier glass material system ported from DSH Go's dsh_surfaces.dart.
- *
- * Chrome and Sheet sit over moving content; Card and Pill rest over the static
- * gradient backdrop with blurSigma = 0f so scrolling lists never thrash GPU
- * offscreen render targets.
  */
 enum class GlassTier { Chrome, Sheet, Card, Pill }
 
@@ -41,13 +37,11 @@ data class DshSurfaces(
     val glowPrimary: Color,
     val glowSecondary: Color,
     val userBubble: Color,
-    val onUserBubble: Color,
     val scrim: Color,
     val chrome: GlassStyle,
     val sheet: GlassStyle,
     val card: GlassStyle,
     val pill: GlassStyle,
-    val accent: AppAccent = AppAccent.Mist,
     val darkTheme: Boolean = true,
     val blurEnabled: Boolean = true
 ) {
@@ -69,9 +63,7 @@ data class DshSurfaces(
                 glowPrimary = accent.glow.copy(alpha = 0.42f),
                 glowSecondary = accent.haze.copy(alpha = 0.38f),
                 userBubble = accent.bubble,
-                onUserBubble = n.ink,
                 scrim = n.scrim.copy(alpha = 0.32f),
-                accent = accent,
                 darkTheme = false,
                 blurEnabled = blurEnabled,
                 chrome = GlassStyle(
@@ -121,9 +113,7 @@ data class DshSurfaces(
                 glowPrimary = accent.glowDark.copy(alpha = 0.28f),
                 glowSecondary = accent.hazeDark.copy(alpha = 0.24f),
                 userBubble = accent.bubbleDark,
-                onUserBubble = n.paper,
                 scrim = black.copy(alpha = 0.48f),
-                accent = accent,
                 darkTheme = true,
                 blurEnabled = blurEnabled,
                 chrome = GlassStyle(

@@ -2,7 +2,7 @@ package com.ryno.classrecorder.ui.screens
 
 import android.media.MediaPlayer
 import android.media.PlaybackParams
-import androidx.activity.compose.PredictiveBackHandler
+import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,16 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.EditNote
-import androidx.compose.material.icons.rounded.Forward10
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Replay5
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,9 +35,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.ryno.classrecorder.core.RecordingRecord
@@ -55,6 +45,7 @@ import com.ryno.classrecorder.ui.components.AppPage
 import com.ryno.classrecorder.ui.components.AppSheet
 import com.ryno.classrecorder.ui.components.CodeWell
 import com.ryno.classrecorder.ui.components.DshConfirmSheet
+import com.ryno.classrecorder.ui.components.DshIcons
 import com.ryno.classrecorder.ui.components.DshPrimaryButton
 import com.ryno.classrecorder.ui.components.DshSecondaryButton
 import com.ryno.classrecorder.ui.components.DshTextField
@@ -69,8 +60,9 @@ import com.ryno.classrecorder.ui.theme.AppShape
 import com.ryno.classrecorder.ui.theme.AppSpace
 import com.ryno.classrecorder.ui.theme.ClassRecorderTheme
 import com.ryno.classrecorder.ui.theme.GlassTier
-import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.io.File
 
 private val SPEED_SEGMENTS = listOf(
@@ -82,13 +74,7 @@ private val SPEED_SEGMENTS = listOf(
 )
 
 /**
- * Full-screen lecture playback & note editor built on DSH Go's [AppPage] + [PageHero]:
- * - Interactive Android [PredictiveBackHandler] gesture scaling
- * - Scroll-collapsing hero with course identity glyph, tabular metadata, tags, and [PageHero] stats
- * - Real PCM-decoded [ScrubWaveformCanvas] card + >= 3:1 seek readout/track
- * - -5s / Play-Pause / +10s transport row
- * - SegmentedPill playback speed selector
- * - Synced notes card + CodeWell file identity + Mist Glass [DshConfirmSheet] delete guard
+ * Full-screen lecture playback & note editor built on DSH Go's [AppPage] + [PageHero].
  */
 @Composable
 fun PlaybackScreen(
@@ -99,22 +85,9 @@ fun PlaybackScreen(
     onShowMessage: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val density = LocalDensity.current
     val scheme = MaterialTheme.colorScheme
     val dsh = ClassRecorderTheme.dshColors
     val mono = ClassRecorderTheme.mono
-
-    var backProgress by remember { mutableFloatStateOf(0f) }
-    PredictiveBackHandler(enabled = true) { progressFlow ->
-        try {
-            progressFlow.collect { event ->
-                backProgress = event.progress.coerceIn(0f, 1f)
-            }
-            onDismiss()
-        } catch (_: CancellationException) {
-            backProgress = 0f
-        }
-    }
 
     var isPlaying by remember(recording.id) { mutableStateOf(false) }
     var currentPosMs by remember(recording.id) { mutableLongStateOf(0L) }
@@ -123,14 +96,21 @@ fun PlaybackScreen(
     var showNotesSheet by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var decodedPeaks by remember(recording.id) { mutableStateOf<List<Float>>(emptyList()) }
+    var fileExists by remember(recording.filePath) { mutableStateOf(true) }
+    var fileSizeLabel by remember(recording.filePath) { mutableStateOf("…") }
+    var lastScrubSeekUptimeMs by remember { mutableLongStateOf(0L) }
 
-    val audioFile = remember(recording.filePath) { File(recording.filePath) }
-    val fileExists = remember(recording.filePath) { audioFile.exists() && audioFile.length() > 0L }
-    val fileSizeLabel = remember(recording.filePath) {
-        if (fileExists) UiFormatters.formatFileSize(audioFile.length()) else "Unavailable"
-    }
+    val fileName = remember(recording.filePath) { File(recording.filePath).name }
 
     LaunchedEffect(recording.id, recording.filePath) {
+        val (exists, sizeStr) = withContext(Dispatchers.IO) {
+            val f = File(recording.filePath)
+            val len = f.length()
+            val ok = f.exists() && len > 0L
+            ok to (if (ok) UiFormatters.formatFileSize(len) else "Unavailable")
+        }
+        fileExists = exists
+        fileSizeLabel = sizeStr
         decodedPeaks = AudioWaveformDecoder.extractPeaks(recording.filePath, bucketCount = 72)
     }
 
@@ -193,9 +173,12 @@ fun PlaybackScreen(
         }
     }
 
-    fun seekTo(targetMs: Long) {
+    fun seekTo(targetMs: Long, force: Boolean = true) {
         val clamped = targetMs.coerceIn(0L, durationMs)
         currentPosMs = clamped
+        val now = SystemClock.uptimeMillis()
+        if (!force && now - lastScrubSeekUptimeMs < 80L) return
+        lastScrubSeekUptimeMs = now
         val mp = mediaPlayerRef ?: return
         if (isPrepared) {
             runCatching { mp.seekTo(clamped.toInt()) }
@@ -213,8 +196,8 @@ fun PlaybackScreen(
     }
 
     val courseTitle = recording.courseName.ifBlank { "Uncategorized" }
-    val fileName = remember(recording.filePath) { audioFile.name }
     val progress = (currentPosMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+    val currentDisplaySeconds = currentPosMs / 1000L
 
     val heroSubtitle = remember(recording) {
         listOfNotNull(
@@ -233,21 +216,12 @@ fun PlaybackScreen(
         )
     }
 
-    val slidePx = with(density) { 40.dp.toPx() } * backProgress
-
     AppPage(
         title = courseTitle,
         onBack = onDismiss,
-        modifier = Modifier.graphicsLayer {
-            val s = 1f - 0.05f * backProgress
-            scaleX = s
-            scaleY = s
-            translationX = slidePx
-            alpha = 1f - 0.18f * backProgress
-        },
         actions = {
             GlassIconButton(
-                icon = Icons.Rounded.EditNote,
+                icon = DshIcons.EditNote,
                 contentDescription = "Edit notes and tags",
                 onClick = { showNotesSheet = true }
             )
@@ -260,7 +234,7 @@ fun PlaybackScreen(
                 stats = heroStats,
                 leading = {
                     OverviewGlyph(
-                        icon = Icons.Rounded.GraphicEq,
+                        icon = DshIcons.GraphicEq,
                         identityKey = courseTitle
                     )
                 }
@@ -285,7 +259,10 @@ fun PlaybackScreen(
                             peaks = decodedPeaks,
                             progress = progress,
                             onScrub = { frac ->
-                                seekTo((frac * durationMs.toFloat()).toLong())
+                                seekTo((frac * durationMs.toFloat()).toLong(), force = false)
+                            },
+                            onScrubFinished = {
+                                seekTo(currentPosMs, force = true)
                             },
                             playedColor = scheme.primary,
                             unplayedColor = dsh.textTertiary,
@@ -295,6 +272,7 @@ fun PlaybackScreen(
                                 .height(152.dp)
                         )
                         Spacer(Modifier.height(12.dp))
+                        // Pure GPU render-node scaleX avoids 31 fps layout passes
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -304,9 +282,11 @@ fun PlaybackScreen(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth(progress)
-                                    .height(3.dp)
-                                    .clip(CircleShape)
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        scaleX = progress
+                                        transformOrigin = TransformOrigin(0f, 0.5f)
+                                    }
                                     .background(scheme.primary)
                             )
                         }
@@ -316,12 +296,14 @@ fun PlaybackScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = UiFormatters.formatDuration(currentPosMs),
+                                text = remember(currentDisplaySeconds) {
+                                    UiFormatters.formatDuration(currentDisplaySeconds * 1000L)
+                                },
                                 style = mono.seekLabel,
                                 color = scheme.onSurface
                             )
                             Text(
-                                text = UiFormatters.formatDuration(durationMs),
+                                text = remember(durationMs) { UiFormatters.formatDuration(durationMs) },
                                 style = mono.seekLabel,
                                 color = dsh.textTertiary
                             )
@@ -344,7 +326,7 @@ fun PlaybackScreen(
                     ) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = Icons.Rounded.Replay5,
+                                imageVector = DshIcons.Replay5,
                                 contentDescription = "Rewind 5 seconds",
                                 tint = if (fileExists) scheme.onSurface else dsh.textDisabled,
                                 modifier = Modifier.size(22.dp)
@@ -354,7 +336,7 @@ fun PlaybackScreen(
 
                     DshPrimaryButton(
                         label = if (isPlaying) "Pause" else "Play",
-                        icon = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        icon = if (isPlaying) DshIcons.Pause else DshIcons.PlayArrow,
                         enabled = fileExists,
                         onClick = ::togglePlayPause,
                         minHeight = 56.dp,
@@ -370,7 +352,7 @@ fun PlaybackScreen(
                     ) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = Icons.Rounded.Forward10,
+                                imageVector = DshIcons.Forward10,
                                 contentDescription = "Forward 10 seconds",
                                 tint = if (fileExists) scheme.onSurface else dsh.textDisabled,
                                 modifier = Modifier.size(22.dp)
@@ -435,7 +417,7 @@ fun PlaybackScreen(
 
                     DshSecondaryButton(
                         label = "Delete recording",
-                        icon = Icons.Rounded.DeleteOutline,
+                        icon = DshIcons.DeleteOutline,
                         danger = true,
                         onClick = { showDeleteDialog = true },
                         modifier = Modifier.fillMaxWidth()
@@ -527,7 +509,7 @@ private fun NotesEditorSheet(
                 onImeAction = ::addTag,
                 trailing = {
                     GlassIconButton(
-                        icon = Icons.Rounded.Add,
+                        icon = DshIcons.Add,
                         contentDescription = "Add tag",
                         onClick = ::addTag,
                         tier = GlassTier.Pill,
@@ -563,7 +545,7 @@ private fun NotesEditorSheet(
                                         color = if (surfaces.darkTheme) scheme.onSurface else scheme.onSurfaceVariant
                                     )
                                     Icon(
-                                        imageVector = Icons.Rounded.Close,
+                                        imageVector = DshIcons.Close,
                                         contentDescription = "Remove $tag",
                                         modifier = Modifier.size(14.dp),
                                         tint = scheme.onSurfaceVariant

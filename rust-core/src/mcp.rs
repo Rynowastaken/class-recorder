@@ -272,7 +272,7 @@ async fn mcp_post_handler(
                 },
                 "serverInfo": {
                     "name": "class-recorder-mcp",
-                    "version": "0.1.0"
+                    "version": env!("CARGO_PKG_VERSION")
                 }
             }),
         ),
@@ -412,15 +412,21 @@ async fn dispatch_tool(state: &Arc<McpState>, name: &str, args: Value) -> Value 
         }
         "start_recording" => {
             let course_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
-            match state.controller.start_recording(&course_json) {
-                Ok(rec) => tool_ok(json!({ "recording": rec })),
-                Err(e) => tool_err(e),
+            let controller = state.controller.clone();
+            match tokio::task::spawn_blocking(move || controller.start_recording(&course_json)).await {
+                Ok(Ok(rec)) => tool_ok(json!({ "recording": rec })),
+                Ok(Err(e)) => tool_err(e),
+                Err(e) => tool_err(format!("Task join error: {e}")),
             }
         }
-        "stop_recording" => match state.controller.stop_recording() {
-            Ok(rec) => tool_ok(json!({ "recording": rec })),
-            Err(e) => tool_err(e),
-        },
+        "stop_recording" => {
+            let controller = state.controller.clone();
+            match tokio::task::spawn_blocking(move || controller.stop_recording()).await {
+                Ok(Ok(rec)) => tool_ok(json!({ "recording": rec })),
+                Ok(Err(e)) => tool_err(e),
+                Err(e) => tool_err(format!("Task join error: {e}")),
+            }
+        }
         "sync_schedule" => {
             let url = args
                 .get("source_url")

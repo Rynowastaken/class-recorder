@@ -1,7 +1,6 @@
 package com.ryno.classrecorder.ui.screens
 
 import android.os.Build
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -31,25 +30,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.Hub
-import androidx.compose.material.icons.rounded.RestartAlt
-import androidx.compose.material.icons.rounded.Save
-import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.CancellationException
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,7 +55,6 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -75,12 +64,14 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.ryno.classrecorder.core.AppDefaults
 import com.ryno.classrecorder.ui.AppearancePreferences
 import com.ryno.classrecorder.ui.DshThemeMode
 import com.ryno.classrecorder.ui.MainUiState
 import com.ryno.classrecorder.ui.components.AppPage
 import com.ryno.classrecorder.ui.components.CapsuleChoiceChip
 import com.ryno.classrecorder.ui.components.CodeWell
+import com.ryno.classrecorder.ui.components.DshIcons
 import com.ryno.classrecorder.ui.components.DshPrimaryButton
 import com.ryno.classrecorder.ui.components.DshSecondaryButton
 import com.ryno.classrecorder.ui.components.DshTextField
@@ -92,6 +83,7 @@ import com.ryno.classrecorder.ui.components.OverviewFooterRow
 import com.ryno.classrecorder.ui.components.OverviewGlyph
 import com.ryno.classrecorder.ui.components.SettingsIcon
 import com.ryno.classrecorder.ui.components.SettingsSwitchTile
+import com.ryno.classrecorder.ui.components.dshSwitchColors
 import com.ryno.classrecorder.ui.theme.AppAccent
 import com.ryno.classrecorder.ui.theme.AppShape
 import com.ryno.classrecorder.ui.theme.AppSpace
@@ -102,7 +94,6 @@ import com.ryno.classrecorder.ui.theme.DshSurfaces
 import com.ryno.classrecorder.ui.theme.StatusTone
 import com.ryno.classrecorder.ui.theme.resolveAppAccent
 
-private const val DEFAULT_TEMPLATE = "{date}_{time}_{class}_{room}"
 private val DATE_FORMATS = listOf(
     "yyyy-MM-dd",
     "yyyyMMdd",
@@ -121,12 +112,7 @@ private val PLACEHOLDER_TOKENS = listOf(
 )
 
 /**
- * Full-screen DSH Go Settings hub built on [AppPage] + [OverviewCard] + [ListPageCard]:
- * 1. On-device MCP server OverviewCard + expandable CodeWell copy rows
- * 2. Appearance picker: Light / Dark / System miniature Mist Glass previews,
- *    6 OKLCH guarded accent swatches, and Android 12+ Follow wallpaper switch
- * 3. Class schedule source URL sync
- * 4. File naming template editor with live .m4a CodeWell preview
+ * Full-screen DSH Go Settings hub built on [AppPage] + [OverviewCard] + [ListPageCard].
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -141,22 +127,9 @@ fun SettingsScreen(
     onShowMessage: (String) -> Unit
 ) {
     val context = LocalContext.current
-    val density = LocalDensity.current
     val scheme = MaterialTheme.colorScheme
     val surfaces = ClassRecorderTheme.surfaces
     val reduced = ClassRecorderTheme.reducedMotion
-
-    var backProgress by remember { mutableFloatStateOf(0f) }
-    PredictiveBackHandler(enabled = true) { progressFlow ->
-        try {
-            progressFlow.collect { event ->
-                backProgress = event.progress.coerceIn(0f, 1f)
-            }
-            onDismiss()
-        } catch (_: CancellationException) {
-            backProgress = 0f
-        }
-    }
 
     var showMcpEndpoints by rememberSaveable { mutableStateOf(false) }
     var scheduleUrl by rememberSaveable(ui.scheduleSourceInput) { mutableStateOf(ui.scheduleSourceInput) }
@@ -171,7 +144,6 @@ fun SettingsScreen(
 
     val activeAccent = resolveAppAccent(ui.accentId)
     val lanUrl = "http://${ui.lanIp}:${ui.mcpStatus.port}/mcp"
-    val adbCmd = "adb forward tcp:${ui.mcpStatus.port} tcp:${ui.mcpStatus.port}"
     val sampleCourse = ui.schedule?.slots
         ?.flatMap { it.days }
         ?.firstOrNull { it != null && it.name.isNotBlank() }
@@ -186,18 +158,9 @@ fun SettingsScreen(
         )
     }
 
-    val slidePx = with(density) { 40.dp.toPx() } * backProgress
-
     AppPage(
         title = "Settings",
-        onBack = onDismiss,
-        modifier = Modifier.graphicsLayer {
-            val s = 1f - 0.05f * backProgress
-            scaleX = s
-            scaleY = s
-            translationX = slidePx
-            alpha = 1f - 0.18f * backProgress
-        }
+        onBack = onDismiss
     ) {
         item(key = "settings_body") {
             Column(
@@ -211,7 +174,7 @@ fun SettingsScreen(
                     OverviewCard(
                         leading = {
                             OverviewGlyph(
-                                icon = Icons.Rounded.Hub,
+                                icon = DshIcons.Hub,
                                 tintSlot = 0
                             )
                         },
@@ -225,13 +188,7 @@ fun SettingsScreen(
                             Switch(
                                 checked = ui.mcpStatus.running,
                                 onCheckedChange = { onToggleMcp() },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = scheme.onPrimary,
-                                    checkedTrackColor = scheme.primary,
-                                    uncheckedThumbColor = scheme.onSurfaceVariant,
-                                    uncheckedTrackColor = scheme.surfaceContainerHighest,
-                                    uncheckedBorderColor = scheme.outlineVariant
-                                )
+                                colors = dshSwitchColors()
                             )
                         },
                         footer = {
@@ -252,28 +209,15 @@ fun SettingsScreen(
                         enter = expandVertically(DshMotion.collapseTween(reduced)) + fadeIn(DshMotion.quickTween(reduced)),
                         exit = shrinkVertically(DshMotion.collapseTween(reduced)) + fadeOut(DshMotion.quickTween(reduced))
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            CodeWell(
-                                label = "LAN endpoint",
-                                text = lanUrl,
-                                onCopy = {
-                                    UiFormatters.copyToClipboard(context, "MCP LAN URL", lanUrl)
-                                    onShowMessage("Copied LAN endpoint")
-                                }
-                            )
-                            CodeWell(
-                                label = "ADB tunnel",
-                                text = adbCmd,
-                                onCopy = {
-                                    UiFormatters.copyToClipboard(context, "ADB forward command", adbCmd)
-                                    onShowMessage("Copied ADB command")
-                                }
-                            )
-                        }
+                        McpEndpointsBlock(
+                            lanIp = ui.lanIp,
+                            port = ui.mcpStatus.port,
+                            onCopied = onShowMessage
+                        )
                     }
                 }
 
-                // 2. Appearance Section (Theme Mode + 6 OKLCH Presets + Follow Wallpaper)
+                // 2. Appearance Section
                 ListPageCard(
                     title = "Appearance",
                     footer = "Colors are contrast-guarded in OKLCH perceptual space across Morning Mist and Slate Night."
@@ -346,7 +290,7 @@ fun SettingsScreen(
                             ?: "Import uni-campus share link or NUTC timetable",
                         leading = {
                             SettingsIcon(
-                                icon = Icons.Rounded.CalendarMonth,
+                                icon = DshIcons.CalendarMonth,
                                 tintSlot = 5
                             )
                         },
@@ -389,7 +333,7 @@ fun SettingsScreen(
                             value = templateInput,
                             onValueChange = { templateInput = it },
                             label = "Filename template",
-                            placeholder = DEFAULT_TEMPLATE,
+                            placeholder = AppDefaults.FILENAME_TEMPLATE,
                             mono = true
                         )
 
@@ -452,21 +396,21 @@ fun SettingsScreen(
                         ) {
                             DshSecondaryButton(
                                 label = "Reset",
-                                icon = Icons.Rounded.RestartAlt,
+                                icon = DshIcons.RestartAlt,
                                 onClick = {
-                                    templateInput = DEFAULT_TEMPLATE
-                                    dateFormatInput = "yyyy-MM-dd"
-                                    onSaveFilenameTemplate(DEFAULT_TEMPLATE, "yyyy-MM-dd")
+                                    templateInput = AppDefaults.FILENAME_TEMPLATE
+                                    dateFormatInput = AppDefaults.DATE_FORMAT
+                                    onSaveFilenameTemplate(AppDefaults.FILENAME_TEMPLATE, AppDefaults.DATE_FORMAT)
                                 },
                                 modifier = Modifier.weight(1f)
                             )
                             DshPrimaryButton(
                                 label = "Save format",
-                                icon = Icons.Rounded.Save,
+                                icon = DshIcons.Save,
                                 onClick = {
                                     onSaveFilenameTemplate(
-                                        templateInput.trim().ifBlank { DEFAULT_TEMPLATE },
-                                        dateFormatInput.trim().ifBlank { "yyyy-MM-dd" }
+                                        templateInput.trim().ifBlank { AppDefaults.FILENAME_TEMPLATE },
+                                        dateFormatInput.trim().ifBlank { AppDefaults.DATE_FORMAT }
                                     )
                                 },
                                 modifier = Modifier.weight(1f)
@@ -479,10 +423,6 @@ fun SettingsScreen(
     }
 }
 
-/**
- * Three side-by-side 0.8-aspect miniature Mist Glass phone previews (Light, Dark, System)
- * ported faithfully from DSH Go's ThemeModePicker in appearance_page.dart.
- */
 @Composable
 private fun ThemeModePickerRow(
     selectedMode: DshThemeMode,
@@ -658,7 +598,6 @@ private fun DrawScope.drawMiniMistPhone(
     val chromeEdge = s.chrome.hairline
     val ink = scheme.onSurface.copy(alpha = if (isDark) 0.26f else 0.20f)
 
-    // Floating top SegmentedPill silhouette
     val headerW = 54f * unit
     val headerH = 9.5f * unit
     val headerTopLeft = Offset((w - headerW) * 0.5f, 7.5f * unit)
@@ -676,7 +615,6 @@ private fun DrawScope.drawMiniMistPhone(
         style = Stroke(width = 0.6.dp.toPx())
     )
 
-    // Overview card & waveform lines
     val bubbleRect = Rect(w - 12f * unit - 48f * unit, 28f * unit, w - 12f * unit, 43f * unit)
     drawRoundRect(
         color = s.userBubble,
@@ -697,7 +635,6 @@ private fun DrawScope.drawMiniMistPhone(
     drawLinePill(12f * unit, 61f * unit, 76f * unit, 4.5f * unit)
     drawLinePill(12f * unit, 70f * unit, 48f * unit, 4.5f * unit)
 
-    // Floating bottom Composer dock with primary record/send circle
     val composerH = 15f * unit
     val composerTop = h - 8f * unit - composerH
     val composerSize = Size(w - 16f * unit, composerH)
@@ -721,10 +658,6 @@ private fun DrawScope.drawMiniMistPhone(
     )
 }
 
-/**
- * Six guarded OKLCH color swatches (`Mist`, `Daiqing`, `Dusk`, `Turquoise`, `Amber`, `Graphite`),
- * ported from DSH Go's PalettePicker in appearance_page.dart.
- */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PalettePickerRow(

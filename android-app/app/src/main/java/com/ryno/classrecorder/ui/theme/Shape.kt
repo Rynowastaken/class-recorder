@@ -26,23 +26,13 @@ object AppShape {
 }
 
 /**
- * DSH Go spacing & reading-column rhythm, ported from dsh_shapes.dart.
+ * DSH Go layout gutters & centered reading column width.
  */
 object AppSpace {
-    val xxs = 2.dp
-    val xs = 4.dp
-    val sm = 8.dp
-    val md = 12.dp
-    val lg = 16.dp
-    val xl = 20.dp
-    val xxl = 24.dp
-    val xxxl = 32.dp
-
     val gutter = 16.dp
     val sheetGutter = 20.dp
     val floatInset = 12.dp
     val readingWidth = 720.dp
-    val floatingWidth = 696.dp
 }
 
 val DshMaterialShapes = Shapes(

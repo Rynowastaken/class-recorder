@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,7 +39,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import com.ryno.classrecorder.ui.theme.AppShape
@@ -50,16 +48,13 @@ import com.ryno.classrecorder.ui.theme.GlassTier
 import kotlin.math.roundToInt
 
 /**
- * Unified modal bottom sheet ported from DSH Go's app_sheet.dart:
- * 28dp top corners in Sheet-tier Mist Glass with Android 12+ cross-window blur,
- * 36×4dp drag handle inside a 48dp accessible dismiss target, and IME + navigation-bar safe padding.
+ * Unified modal bottom sheet ported from DSH Go's app_sheet.dart.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppSheet(
     onDismiss: () -> Unit,
     title: String? = null,
-    actions: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -114,10 +109,7 @@ fun AppSheet(
                 ) {
                     SheetDragHandle(onDismiss = onDismiss)
                     if (!title.isNullOrBlank()) {
-                        SheetHeader(
-                            title = title,
-                            actions = actions
-                        )
+                        SheetHeader(title = title)
                     }
                     content()
                 }
@@ -176,27 +168,17 @@ fun DshConfirmSheet(
     }
 }
 
-/**
- * 36×4dp stadium drag indicator inside a full-width 48dp accessible close button.
- */
 @Composable
-fun SheetDragHandle(
-    onDismiss: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
-) {
+private fun SheetDragHandle(onDismiss: () -> Unit) {
     val handleColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
     Box(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .height(48.dp)
-            .then(
-                if (onDismiss != null) {
-                    Modifier.clickable(
-                        role = Role.Button,
-                        onClickLabel = "Close sheet",
-                        onClick = onDismiss
-                    )
-                } else Modifier
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "Close sheet",
+                onClick = onDismiss
             ),
         contentAlignment = Alignment.Center
     ) {
@@ -210,13 +192,9 @@ fun SheetDragHandle(
 }
 
 @Composable
-fun SheetHeader(
-    title: String,
-    modifier: Modifier = Modifier,
-    actions: @Composable RowScope.() -> Unit = {}
-) {
+private fun SheetHeader(title: String) {
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .padding(
                 start = AppSpace.sheetGutter,
@@ -235,11 +213,6 @@ fun SheetHeader(
                 .weight(1f)
                 .semantics { heading() }
         )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            content = actions
-        )
     }
 }
 
@@ -250,15 +223,13 @@ fun SheetHeader(
 @Composable
 fun SheetGroup(
     title: String? = null,
-    modifier: Modifier = Modifier,
-    horizontalMargin: Dp = AppSpace.sheetGutter,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val dsh = ClassRecorderTheme.dshColors
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = horizontalMargin, vertical = 6.dp)
+            .padding(horizontal = AppSpace.sheetGutter, vertical = 6.dp)
     ) {
         if (!title.isNullOrBlank()) {
             Text(

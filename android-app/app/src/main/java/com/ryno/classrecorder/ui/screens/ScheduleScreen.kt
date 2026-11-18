@@ -28,17 +28,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.EventAvailable
-import androidx.compose.material.icons.rounded.Link
-import androidx.compose.material.icons.rounded.Mic
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -65,11 +58,14 @@ import com.ryno.classrecorder.core.CourseSlot
 import com.ryno.classrecorder.ui.MainUiState
 import com.ryno.classrecorder.ui.components.AppSheet
 import com.ryno.classrecorder.ui.components.BackdropVeil
+import com.ryno.classrecorder.ui.components.BindScrollUnderVeil
+import com.ryno.classrecorder.ui.components.DshIcons
 import com.ryno.classrecorder.ui.components.DshPrimaryButton
 import com.ryno.classrecorder.ui.components.DshTextField
 import com.ryno.classrecorder.ui.components.EmptyView
 import com.ryno.classrecorder.ui.components.GlassIconButton
 import com.ryno.classrecorder.ui.components.GlassSurface
+import com.ryno.classrecorder.ui.components.QuietTagPill
 import com.ryno.classrecorder.ui.components.StatusChip
 import com.ryno.classrecorder.ui.components.rememberSafeSideInsets
 import com.ryno.classrecorder.ui.theme.AppShape
@@ -96,10 +92,7 @@ private data class ScheduledPeriod(
 )
 
 /**
- * Weekly timetable screen rebuilt in DSH Go's Mist Glass language:
- * - Quiet school header + circular Chrome-glass Refresh & Source actions
- * - 96dp 7-day week strip with spring-loaded primary selection capsule and FNV-1a pips
- * - Card-tier class rows where only the active `Now` class receives primary button emphasis
+ * Weekly timetable screen rebuilt in DSH Go's Mist Glass language.
  */
 @Composable
 fun ScheduleScreen(
@@ -109,11 +102,12 @@ fun ScheduleScreen(
     topContentInset: Dp = 0.dp,
     onScrolledUnderChange: (Float) -> Unit = {}
 ) {
-    val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
     val reduced = ClassRecorderTheme.reducedMotion
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val listState = rememberLazyListState()
+
+    BindScrollUnderVeil(listState = listState, onScrolledUnderChange = onScrolledUnderChange)
 
     val canScrollDown by remember { derivedStateOf { listState.canScrollForward } }
     val bottomVeilAlpha by animateFloatAsState(
@@ -127,20 +121,6 @@ fun ScheduleScreen(
     val monday = remember(today) { today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)) }
     var selectedDay by remember { mutableIntStateOf(todayIndex) }
     var showSourceSheet by remember { mutableStateOf(false) }
-
-    val scrollFraction by remember {
-        derivedStateOf {
-            val px = if (listState.firstVisibleItemIndex > 0) {
-                1000f
-            } else {
-                listState.firstVisibleItemScrollOffset.toFloat()
-            }
-            (px / with(density) { 24.dp.toPx() }).coerceIn(0f, 1f)
-        }
-    }
-    LaunchedEffect(scrollFraction) {
-        onScrolledUnderChange(scrollFraction)
-    }
 
     val schedule = ui.schedule
     val dayCoursesByIndex = remember(schedule, ui.currentClass, todayIndex) {
@@ -220,7 +200,7 @@ fun ScheduleScreen(
                     item(key = "empty_no_schedule") {
                         Spacer(Modifier.height(12.dp))
                         EmptyView(
-                            icon = Icons.Rounded.CalendarMonth,
+                            icon = DshIcons.CalendarMonth,
                             title = "No schedule synced",
                             message = "Import your uni-campus share link or NUTC timetable so recordings are tagged automatically.",
                             actionLabel = "Sync schedule",
@@ -232,7 +212,7 @@ fun ScheduleScreen(
                     item(key = "empty_day_$selectedDay") {
                         Spacer(Modifier.height(12.dp))
                         EmptyView(
-                            icon = Icons.Rounded.EventAvailable,
+                            icon = DshIcons.EventAvailable,
                             title = "No classes on ${FULL_DAYS[selectedDay]}",
                             message = "Select another weekday above to browse upcoming lectures.",
                             actionLabel = if (selectedDay != todayIndex) "Jump to today" else null,
@@ -313,7 +293,7 @@ private fun ScheduleHeaderBar(
         }
         Spacer(Modifier.width(8.dp))
         GlassIconButton(
-            icon = Icons.Rounded.Refresh,
+            icon = DshIcons.Refresh,
             contentDescription = "Refresh schedule",
             onClick = onRefresh,
             tier = GlassTier.Pill,
@@ -321,7 +301,7 @@ private fun ScheduleHeaderBar(
             badgeTone = if (isSyncing) StatusTone.Busy else null
         )
         GlassIconButton(
-            icon = Icons.Rounded.Link,
+            icon = DshIcons.Link,
             contentDescription = "Schedule source link",
             onClick = onOpenSource,
             tier = GlassTier.Pill,
@@ -510,21 +490,10 @@ private fun PeriodClassCard(
                     maxLines = 1,
                     softWrap = false
                 )
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(
-                            if (surfaces.darkTheme) scheme.onSurface.copy(alpha = 0.08f)
-                            else scheme.onSurface.copy(alpha = 0.055f)
-                        )
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "P${period.slot}",
-                        style = MaterialTheme.typography.labelSmall.tabular(),
-                        color = dsh.textTertiary
-                    )
-                }
+                QuietTagPill(
+                    text = "P${period.slot}",
+                    tabularFigures = true
+                )
             }
 
             Spacer(Modifier.width(10.dp))
@@ -582,7 +551,7 @@ private fun PeriodClassCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Mic,
+                        imageVector = DshIcons.Mic,
                         contentDescription = "Record ${period.course.name}",
                         tint = scheme.onPrimary,
                         modifier = Modifier.size(20.dp)
@@ -590,7 +559,7 @@ private fun PeriodClassCard(
                 }
             } else {
                 GlassIconButton(
-                    icon = Icons.Rounded.Mic,
+                    icon = DshIcons.Mic,
                     contentDescription = "Record ${period.course.name}",
                     onClick = onRecord,
                     tier = GlassTier.Pill,
