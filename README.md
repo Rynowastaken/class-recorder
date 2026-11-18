@@ -1,4 +1,4 @@
-# 🎙️ Class Recorder
+# Class Recorder
 
 **A lecture recorder that actually knows your timetable.**
 
