@@ -6,9 +6,9 @@ Records your lectures and files them by course — automatically. It reads your 
 
 <table>
 <tr>
-<td align="center"><img src="docs/screenshots/recorder.png" width="240" alt="Recorder tab"><br><sub><b>Record</b> — already knows your class</sub></td>
-<td align="center"><img src="docs/screenshots/schedule.png" width="240" alt="Schedule tab"><br><sub><b>Schedule</b> — your week at a glance</sub></td>
-<td align="center"><img src="docs/screenshots/recordings.png" width="240" alt="Recordings tab"><br><sub><b>Recordings</b> — sorted by day</sub></td>
+<td align="center" valign="top"><img src="docs/screenshots/recorder.png" width="240" alt="Recorder tab: class card shows 大學之道 in session"><br><b>Record</b><br><sub>already knows your class</sub></td>
+<td align="center" valign="top"><img src="docs/screenshots/schedule.png" width="240" alt="Schedule tab: weekly timetable with Wednesday selected"><br><b>Schedule</b><br><sub>your week at a glance</sub></td>
+<td align="center" valign="top"><img src="docs/screenshots/recordings.png" width="240" alt="Recordings tab: four lectures grouped by day"><br><b>Recordings</b><br><sub>sorted by day</sub></td>
 </tr>
 </table>
 
@@ -40,7 +40,7 @@ Records your lectures and files them by course — automatically. It reads your 
 
 **AI assistant** — Settings → MCP server → On. Connect at `http://<phone-ip>:8765/mcp`.
 
-**Live island** — Android 16 / HyperOS only, needs [Shizuku](https://shizuku.rikka.app/). Recording works the same without it.
+**Live island** — Android 16 / HyperOS only. Recording, the notification, and its pause/stop controls work without any setup; [Shizuku](https://shizuku.rikka.app/) just lets Android 16 promote it to a Live Update pill.
 
 ---
 
