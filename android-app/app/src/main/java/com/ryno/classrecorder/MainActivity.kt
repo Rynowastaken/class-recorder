@@ -9,46 +9,112 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ryno.classrecorder.core.RecordingRecord
 import com.ryno.classrecorder.ui.MainViewModel
+import com.ryno.classrecorder.ui.components.BackdropVeil
+import com.ryno.classrecorder.ui.components.DshBackdrop
+import com.ryno.classrecorder.ui.components.GlassIconButton
+import com.ryno.classrecorder.ui.components.GlassSurface
+import com.ryno.classrecorder.ui.components.PillSegment
+import com.ryno.classrecorder.ui.components.SegmentedPill
 import com.ryno.classrecorder.ui.screens.LibraryScreen
+import com.ryno.classrecorder.ui.screens.PlaybackScreen
 import com.ryno.classrecorder.ui.screens.RecordScreen
 import com.ryno.classrecorder.ui.screens.ScheduleScreen
+import com.ryno.classrecorder.ui.screens.SettingsScreen
+import com.ryno.classrecorder.ui.theme.AppShape
+import com.ryno.classrecorder.ui.theme.AppSpace
 import com.ryno.classrecorder.ui.theme.ClassRecorderTheme
+import com.ryno.classrecorder.ui.theme.DshMotion
+import com.ryno.classrecorder.ui.theme.GlassTier
+import com.ryno.classrecorder.ui.theme.StatusTone
+import kotlinx.coroutines.launch
+
+private val ROOT_TABS = listOf(
+    PillSegment(0, "Recorder"),
+    PillSegment(1, "Schedule"),
+    PillSegment(2, "Recordings")
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            ClassRecorderTheme {
-                ClassRecorderApp()
+            val vm: MainViewModel = viewModel()
+            val ui by vm.ui.collectAsState()
+            ClassRecorderTheme(
+                themeMode = ui.themeMode,
+                accentId = ui.accentId
+            ) {
+                ClassRecorderApp(vm = vm)
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
     val ui by vm.ui.collectAsState()
     val recorder by vm.recorderState.collectAsState()
     val context = LocalContext.current
+    val reduced = ClassRecorderTheme.reducedMotion
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var openMcpSheet by remember { mutableStateOf(false) }
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { ROOT_TABS.size })
+    val pageScrollVeils = remember { mutableStateMapOf(0 to 0f, 1 to 0f, 2 to 0f) }
+
+    var openMcpSheetInLibrary by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+    var activePlaybackId by remember { mutableStateOf<String?>(null) }
+    var lastPlaybackSnapshot by remember { mutableStateOf<RecordingRecord?>(null) }
+
+    val playbackRecording = remember(activePlaybackId, ui.recordings, lastPlaybackSnapshot) {
+        val id = activePlaybackId ?: return@remember null
+        ui.recordings.find { it.id == id } ?: lastPlaybackSnapshot
+    }
 
     var hasMicPermission by remember {
         mutableStateOf(
@@ -72,87 +138,206 @@ fun ClassRecorderApp(vm: MainViewModel = viewModel()) {
     }
 
     LaunchedEffect(ui.statusMessage) {
-        ui.statusMessage?.let {
-            snackbarHostState.showSnackbar(it)
+        ui.statusMessage?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
             vm.clearMessage()
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        when (selectedTab) {
-                            0 -> "Class Recorder"
-                            1 -> "Class Schedule"
-                            else -> "Library & Agents"
-                        }
+    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val chromeBarHeight = 56.dp
+    val topReserved = statusTop + chromeBarHeight
+
+    val currentVeilAlpha = pageScrollVeils[pagerState.currentPage] ?: 0f
+    val fractionalPage = (pagerState.currentPage + pagerState.currentPageOffsetFraction)
+        .coerceIn(0f, (ROOT_TABS.size - 1).toFloat())
+
+    DshBackdrop(modifier = Modifier.fillMaxSize()) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val sideInset = ((maxWidth - AppSpace.readingWidth) / 2f).coerceAtLeast(0.dp)
+
+            HorizontalPager(
+                state = pagerState,
+                beyondViewportPageCount = 2,
+                modifier = Modifier.fillMaxSize()
+            ) { tab ->
+                when (tab) {
+                    0 -> RecordScreen(
+                        ui = ui,
+                        recorder = recorder,
+                        hasMicPermission = hasMicPermission,
+                        onRequestMicPermission = ::requestPermissions,
+                        onStartRecording = { vm.startRecording() },
+                        onStopRecording = { vm.stopRecording() },
+                        onDiscardRecording = { vm.discardRecording() },
+                        onTogglePause = { vm.togglePause() },
+                        onSelectCourseOverride = { vm.selectCourseOverride(it) },
+                        onOpenMcpSheet = {
+                            openMcpSheetInLibrary = true
+                            scope.launch {
+                                pagerState.animateScrollToPage(2, animationSpec = DshMotion.standardTween(reduced))
+                            }
+                        },
+                        onToggleMcp = { vm.toggleMcpServer() },
+                        onShowMessage = { vm.showMessage(it) },
+                        topContentInset = topReserved,
+                        onScrolledUnderChange = { pageScrollVeils[0] = it }
+                    )
+                    1 -> ScheduleScreen(
+                        ui = ui,
+                        onSyncSchedule = { vm.syncSchedule(it) },
+                        onRecordCourse = { course, slot ->
+                            if (hasMicPermission) {
+                                vm.startRecordingForCourse(course, slot)
+                                scope.launch {
+                                    pagerState.animateScrollToPage(0, animationSpec = DshMotion.standardTween(reduced))
+                                }
+                            } else {
+                                requestPermissions()
+                            }
+                        },
+                        topContentInset = topReserved,
+                        onScrolledUnderChange = { pageScrollVeils[1] = it }
+                    )
+                    else -> LibraryScreen(
+                        ui = ui,
+                        showMcpSheetInitial = openMcpSheetInLibrary,
+                        onDismissMcpSheet = { openMcpSheetInLibrary = false },
+                        onToggleMcp = { vm.toggleMcpServer() },
+                        onUpdateNotes = { id, notes, tags -> vm.updateNotes(id, notes, tags) },
+                        onDeleteRecording = { vm.deleteRecording(it) },
+                        onSaveFilenameTemplate = { tmpl, fmt -> vm.saveFilenameTemplate(tmpl, fmt) },
+                        onShowMessage = { vm.showMessage(it) },
+                        onOpenPlayback = { rec ->
+                            lastPlaybackSnapshot = rec
+                            activePlaybackId = rec.id
+                        },
+                        topContentInset = topReserved,
+                        onScrolledUnderChange = { pageScrollVeils[2] = it }
                     )
                 }
+            }
+
+            // Feathered top veil only once page content scrolls underneath the floating chrome
+            BackdropVeil(
+                fromTop = true,
+                solidHeight = topReserved,
+                feather = 14.dp,
+                alpha = currentVeilAlpha,
+                modifier = Modifier.align(Alignment.TopCenter)
             )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Default.Mic, contentDescription = "Record") },
-                    label = { Text("Record") }
+
+            // Floating DSH Go top chrome bar: SegmentedPill + circular Settings GlassIconButton
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = statusTop)
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = chromeBarHeight)
+                    .padding(horizontal = AppSpace.floatInset + sideInset, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SegmentedPill(
+                    segments = ROOT_TABS,
+                    selected = pagerState.currentPage,
+                    onSelect = { targetPage ->
+                        scope.launch {
+                            pagerState.animateScrollToPage(
+                                page = targetPage,
+                                animationSpec = DshMotion.standardTween(reduced)
+                            )
+                        }
+                    },
+                    chromeGlass = true,
+                    fractionalIndex = fractionalPage,
+                    modifier = Modifier.weight(1f)
                 )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Default.CalendarMonth, contentDescription = "Schedule") },
-                    label = { Text("Schedule") }
+
+                Spacer(Modifier.width(8.dp))
+
+                GlassIconButton(
+                    icon = Icons.Rounded.Settings,
+                    contentDescription = "Settings",
+                    onClick = { showSettings = true },
+                    tier = GlassTier.Chrome,
+                    badgeTone = if (ui.mcpStatus.running) StatusTone.Ok else null
                 )
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    icon = { Icon(Icons.Default.Folder, contentDescription = "Library") },
-                    label = { Text("Library") }
+            }
+
+            // Chrome-tier Mist Glass snackbar host above the floating composer dock
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(
+                        start = AppSpace.gutter + sideInset,
+                        end = AppSpace.gutter + sideInset,
+                        bottom = navBottom + 88.dp
+                    )
+            ) { data ->
+                GlassSurface(
+                    tier = GlassTier.Chrome,
+                    shape = AppShape.radiusLg,
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        text = data.visuals.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+
+        // Full-screen Playback push overlay
+        AnimatedVisibility(
+            visible = playbackRecording != null,
+            enter = slideInHorizontally(
+                animationSpec = DshMotion.glideTween(reduced),
+                initialOffsetX = { full -> full / 5 }
+            ) + fadeIn(DshMotion.quickTween(reduced)),
+            exit = slideOutHorizontally(
+                animationSpec = DshMotion.glideTween(reduced),
+                targetOffsetX = { full -> full / 5 }
+            ) + fadeOut(DshMotion.quickTween(reduced))
+        ) {
+            val rec = playbackRecording ?: lastPlaybackSnapshot
+            if (rec != null) {
+                PlaybackScreen(
+                    recording = rec,
+                    onDismiss = { activePlaybackId = null },
+                    onUpdateNotes = { id, notes, tags -> vm.updateNotes(id, notes, tags) },
+                    onDeleteRecording = { id ->
+                        activePlaybackId = null
+                        vm.deleteRecording(id)
+                    }
                 )
             }
         }
-    ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding)) {
-            when (selectedTab) {
-                0 -> RecordScreen(
-                    ui = ui,
-                    recorder = recorder,
-                    hasMicPermission = hasMicPermission,
-                    onRequestMicPermission = ::requestPermissions,
-                    onStartRecording = { vm.startRecording() },
-                    onStopRecording = { vm.stopRecording() },
-                    onTogglePause = { vm.togglePause() },
-                    onSelectCourseOverride = { vm.selectCourseOverride(it) },
-                    onOpenMcpSheet = {
-                        openMcpSheet = true
-                        selectedTab = 2
-                    }
-                )
-                1 -> ScheduleScreen(
-                    ui = ui,
-                    onSyncSchedule = { vm.syncSchedule(it) },
-                    onRecordCourse = { course, slot ->
-                        if (hasMicPermission) {
-                            vm.startRecordingForCourse(course, slot)
-                            selectedTab = 0
-                        } else {
-                            requestPermissions()
-                        }
-                    }
-                )
-                else -> LibraryScreen(
-                    ui = ui,
-                    showMcpSheetInitial = openMcpSheet,
-                    onDismissMcpSheet = { openMcpSheet = false },
-                    onToggleMcp = { vm.toggleMcpServer() },
-                    onUpdateNotes = { id, notes, tags -> vm.updateNotes(id, notes, tags) },
-                    onDeleteRecording = { vm.deleteRecording(it) }
-                )
-            }
+
+        // Full-screen Settings push overlay
+        AnimatedVisibility(
+            visible = showSettings,
+            enter = slideInHorizontally(
+                animationSpec = DshMotion.glideTween(reduced),
+                initialOffsetX = { full -> full / 5 }
+            ) + fadeIn(DshMotion.quickTween(reduced)),
+            exit = slideOutHorizontally(
+                animationSpec = DshMotion.glideTween(reduced),
+                targetOffsetX = { full -> full / 5 }
+            ) + fadeOut(DshMotion.quickTween(reduced))
+        ) {
+            SettingsScreen(
+                ui = ui,
+                onDismiss = { showSettings = false },
+                onSelectThemeMode = { vm.setThemeMode(it) },
+                onSelectAccentId = { vm.setAccentId(it) },
+                onSaveFilenameTemplate = { tmpl, fmt -> vm.saveFilenameTemplate(tmpl, fmt) },
+                onSyncSchedule = { vm.syncSchedule(it) },
+                onToggleMcp = { vm.toggleMcpServer() },
+                onShowMessage = { vm.showMessage(it) }
+            )
         }
     }
 }

@@ -76,25 +76,11 @@ fun ClassRecorderTheme(
         }
     }
 
-    val legacyColors = remember(isDark, dshColors, surfaces, colorScheme) {
-        ClassRecorderColors(
-            recordAccent = dshColors.danger,
-            recordAccentMuted = dshColors.danger.copy(alpha = 0.72f),
-            onRecordAccent = dshColors.onDanger,
-            hairline = colorScheme.outlineVariant,
-            accentWarm = dshColors.warning,
-            courseFallback = colorScheme.primary,
-            pageTop = surfaces.backdropTop,
-            pageBottom = surfaces.backdropBottom
-        )
-    }
-
     CompositionLocalProvider(
         LocalDshSurfaces provides surfaces,
         LocalDshColors provides dshColors,
         LocalMonoTypography provides DshMonoTypography,
-        LocalReducedMotion provides reducedMotion,
-        LocalClassRecorderColors provides legacyColors
+        LocalReducedMotion provides reducedMotion
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
@@ -121,17 +107,4 @@ object ClassRecorderTheme {
     val reducedMotion: Boolean
         @Composable @ReadOnlyComposable
         get() = LocalReducedMotion.current
-
-    /** Temporary compatibility accessors removed in Task 5. */
-    val colors: ClassRecorderColors
-        @Composable @ReadOnlyComposable
-        get() = LocalClassRecorderColors.current
-
-    val motion: ExpressionSpecs
-        @Composable @ReadOnlyComposable
-        get() = expressionSpecs()
-
-    val type: ExpressiveType
-        @Composable @ReadOnlyComposable
-        get() = ClassRecorderExpressiveType
 }

@@ -52,6 +52,3 @@ val DshMaterialShapes = Shapes(
     large = AppShape.radiusLg,
     extraLarge = AppShape.radiusXl
 )
-
-/** Compatibility alias kept until Task 5 removes legacy callers. */
-val ClassRecorderShapes = DshMaterialShapes

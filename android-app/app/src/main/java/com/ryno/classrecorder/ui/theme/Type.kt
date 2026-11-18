@@ -7,7 +7,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
@@ -225,25 +224,3 @@ val DshTypography = Typography(
         lineHeightStyle = EvenLineHeight
     )
 )
-
-/** Compatibility aliases kept until Task 5 cleans legacy screen callers. */
-val ClassRecorderMonoTypography = DshMonoTypography
-val ClassRecorderTypography = DshTypography
-val PageGutter = 16.dp
-
-@Immutable
-data class ExpressiveType(
-    val displayTimer: TextStyle,
-    val heroTitle: TextStyle,
-    val sectionEyebrow: TextStyle,
-    val heroTimer: TextStyle
-)
-
-val ClassRecorderExpressiveType = ExpressiveType(
-    displayTimer = DshMonoTypography.timer,
-    heroTitle = DshTypography.headlineLarge,
-    sectionEyebrow = DshTypography.labelMedium,
-    heroTimer = DshMonoTypography.timer
-)
-
-val expressiveType: ExpressiveType get() = ClassRecorderExpressiveType
